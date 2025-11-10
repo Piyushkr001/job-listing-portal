@@ -61,7 +61,7 @@ function Navbar() {
               src="/Images/Logo/logo.svg"
               alt="HireOrbit Logo"
               width={140}
-              height={40}
+              height={140}
               className="h-10 w-auto"
               priority
             />
