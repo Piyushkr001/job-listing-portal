@@ -1,0 +1,190 @@
+"use client";
+
+import React from "react";
+import Link from "next/link";
+import Image from "next/image";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
+import { Linkedin, Instagram, Mail } from "lucide-react";
+import { XLogoIcon } from "@phosphor-icons/react";
+
+function Footer() {
+  return (
+    <footer className="border-t bg-background">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-4 py-10 md:flex-row md:gap-12 md:py-12">
+        {/* Left: Brand + description */}
+        <div className="flex flex-1 flex-col gap-4">
+          <Link href="/" className="flex items-center gap-2">
+            <Image
+              src="/Images/Logo/logo.svg"
+              alt="HireOrbit Logo"
+              width={140}
+              height={140}
+            />
+          </Link>
+          <p className="max-w-sm text-sm text-muted-foreground">
+            HireOrbit connects ambitious companies with top talent through a
+            modern, streamlined hiring experience tailored for growing teams.
+          </p>
+
+          {/* Socials */}
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <span className="text-xs font-medium text-muted-foreground">
+              Follow us
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 rounded-full"
+                asChild
+              >
+                <Link href="https://linkedin.com" aria-label="LinkedIn">
+                  <Linkedin className="h-4 w-4" />
+                </Link>
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 rounded-full"
+                asChild
+              >
+                <Link href="https://twitter.com" aria-label="Twitter">
+                  <XLogoIcon className="h-4 w-4" />
+                </Link>
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 rounded-full"
+                asChild
+              >
+                <Link href="https://instagram.com" aria-label="Instagram">
+                  <Instagram className="h-4 w-4" />
+                </Link>
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Middle: Link columns */}
+        <div className="flex flex-1 flex-col gap-6 text-sm md:flex-row md:justify-center">
+          <div className="flex flex-col gap-2">
+            <h3 className="text-sm font-semibold">For candidates</h3>
+            <Link
+              href="/jobs"
+              className="text-sm text-muted-foreground hover:text-foreground"
+            >
+              Browse jobs
+            </Link>
+            <Link
+              href="/signup"
+              className="text-sm text-muted-foreground hover:text-foreground"
+            >
+              Create account
+            </Link>
+            <Link
+              href="/login"
+              className="text-sm text-muted-foreground hover:text-foreground"
+            >
+              Sign in
+            </Link>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <h3 className="text-sm font-semibold">For employers</h3>
+            <Link
+              href="/employers/post"
+              className="text-sm text-muted-foreground hover:text-foreground"
+            >
+              Post a job
+            </Link>
+            <Link
+              href="/employers"
+              className="text-sm text-muted-foreground hover:text-foreground"
+            >
+              Employer dashboard
+            </Link>
+            <Link
+              href="/pricing"
+              className="text-sm text-muted-foreground hover:text-foreground"
+            >
+              Pricing
+            </Link>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <h3 className="text-sm font-semibold">Company</h3>
+            <Link
+              href="/about"
+              className="text-sm text-muted-foreground hover:text-foreground"
+            >
+              About
+            </Link>
+            <Link
+              href="/contact"
+              className="text-sm text-muted-foreground hover:text-foreground"
+            >
+              Contact
+            </Link>
+            <Link
+              href="/support"
+              className="text-sm text-muted-foreground hover:text-foreground"
+            >
+              Support
+            </Link>
+          </div>
+        </div>
+
+        {/* Right: Newsletter */}
+        <div className="flex flex-1 flex-col gap-4">
+          <h3 className="text-sm font-semibold">Stay in the loop</h3>
+          <p className="text-sm text-muted-foreground">
+            Get hiring insights, product updates, and curated job market trends
+            delivered to your inbox.
+          </p>
+          <form
+            className="flex flex-col gap-2 sm:flex-row"
+            onSubmit={(e) => e.preventDefault()}
+          >
+            <div className="flex flex-1 items-center gap-2 rounded-full border bg-card px-3 py-1.5">
+              <Mail className="h-4 w-4 text-muted-foreground" />
+              <Input
+                type="email"
+                placeholder="you@example.com"
+                className="h-8 border-none bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+              />
+            </div>
+            <Button className="h-9 rounded-full px-4 text-sm mt-1 sm:mt-0">
+              Subscribe
+            </Button>
+          </form>
+          <p className="text-[11px] text-muted-foreground">
+            We respect your privacy. Unsubscribe anytime.
+          </p>
+        </div>
+      </div>
+
+      <Separator className="mx-auto w-full max-w-6xl" />
+
+      {/* Bottom bar */}
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-4 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+        <p>© {new Date().getFullYear()} HireOrbit. All rights reserved.</p>
+        <div className="flex flex-wrap items-center gap-4">
+          <Link href="/terms" className="hover:text-foreground">
+            Terms
+          </Link>
+          <Link href="/privacy" className="hover:text-foreground">
+            Privacy
+          </Link>
+          <Link href="/cookies" className="hover:text-foreground">
+            Cookies
+          </Link>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+export default Footer;

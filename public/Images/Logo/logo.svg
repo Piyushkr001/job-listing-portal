@@ -1,0 +1,46 @@
+<!-- HireOrbit — Combined Gradient Logo (Icon + Wordmark) -->
+<svg viewBox="0 0 1024 256" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="HireOrbit logo">
+  <title>HireOrbit — Combined Gradient Logo</title>
+  <defs>
+    <!-- Icon orbit gradients -->
+    <linearGradient id="ho-ring" x1="20" y1="20" x2="196" y2="196" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"  style="stop-color: var(--logo-g1, #6366F1)"/>
+      <stop offset="50%" style="stop-color: var(--logo-g2, #22D3EE)"/>
+      <stop offset="100%" style="stop-color: var(--logo-g3, #10B981)"/>
+    </linearGradient>
+    <radialGradient id="ho-dot" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse"
+                    gradientTransform="translate(164 74) scale(18)">
+      <stop offset="0%"  style="stop-color: var(--logo-g2, #22D3EE)"/>
+      <stop offset="100%" style="stop-color: var(--logo-g1, #6366F1)"/>
+    </radialGradient>
+
+    <!-- Wordmark gradients -->
+    <linearGradient id="ho-text-grad" x1="240" y1="40" x2="920" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"  style="stop-color: var(--logo-g1, #6366F1)"/>
+      <stop offset="50%" style="stop-color: var(--logo-g2, #22D3EE)"/>
+      <stop offset="100%" style="stop-color: var(--logo-g3, #10B981)"/>
+    </linearGradient>
+    <linearGradient id="ho-text-stroke" x1="240" y1="40" x2="920" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"  style="stop-color: var(--logo-stroke, rgba(15,23,42,.25))"/>
+      <stop offset="100%" style="stop-color: var(--logo-stroke, rgba(15,23,42,0))"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Icon (left) -->
+  <g transform="translate(20,20)">
+    <circle cx="108" cy="108" r="54" fill="none" stroke="url(#ho-ring)" stroke-width="12" stroke-linecap="round"/>
+    <ellipse cx="108" cy="108" rx="88" ry="44" transform="rotate(-25 108 108)"
+             fill="none" stroke="url(#ho-ring)" stroke-width="12" stroke-linecap="round"/>
+    <circle cx="164" cy="74" r="12" fill="url(#ho-dot)"/>
+  </g>
+
+  <!-- Wordmark (right) -->
+  <text x="240" y="160"
+        font-family="Inter, Poppins, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif"
+        font-weight="800" font-size="120"
+        fill="url(#ho-text-grad)"
+        paint-order="stroke"
+        stroke="url(#ho-text-stroke)" stroke-width="1.5" stroke-linejoin="round">
+    HireOrbit
+  </text>
+</svg>
