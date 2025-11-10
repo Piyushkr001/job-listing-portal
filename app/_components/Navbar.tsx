@@ -51,7 +51,7 @@ function Navbar() {
   }, [router]);
 
   return (
-    <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur">
+    <header className="sticky top-0 z-50 rounded-3xl border-b bg-background/80 backdrop-blur">
       {/* Main bar */}
       <div className="mx-auto flex w-full max-w-6xl items-center px-4 py-3 md:py-4">
         {/* Left: Logo (flex-1) */}
