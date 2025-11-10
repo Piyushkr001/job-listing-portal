@@ -102,19 +102,17 @@ function Navbar() {
                 <Button
                   asChild
                   variant="outline"
-                  size="sm"
                   className="rounded-full px-4"
                 >
                   <Link href="/login">Login</Link>
                 </Button>
-                <Button asChild size="sm" className="rounded-full px-4">
+                <Button asChild  className="rounded-full px-4">
                   <Link href="/signup">Sign Up</Link>
                 </Button>
               </>
             ) : (
               <Button
                 variant="outline"
-                size="sm"
                 className="rounded-full px-4"
                 onClick={handleLogout}
               >
