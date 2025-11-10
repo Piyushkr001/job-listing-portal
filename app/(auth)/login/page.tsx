@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/tabs";
 
 const AUTH_TOKEN_KEY = "hireorbit_token";
+const ROLE_KEY = "hireorbit_role"; // ✅ add role key
 
 function LoginPage() {
   const router = useRouter();
@@ -66,6 +67,7 @@ function LoginPage() {
         // Expect backend to return { token, user, ... }
         if (typeof window !== "undefined") {
           window.localStorage.setItem(AUTH_TOKEN_KEY, data.token);
+          window.localStorage.setItem(ROLE_KEY, role); // ✅ store role
         }
 
         toast.success(
@@ -123,6 +125,7 @@ function LoginPage() {
         // Expect backend to return { token, user, ... }
         if (typeof window !== "undefined") {
           window.localStorage.setItem(AUTH_TOKEN_KEY, data.token);
+          window.localStorage.setItem(ROLE_KEY, role); // ✅ store role
         }
 
         toast.success(
@@ -392,9 +395,9 @@ function LoginPage() {
                       <Link
                         href="/forgot-password"
                         className="font-medium text-primary hover:underline"
-                      >
-                        Forgot password?
-                      </Link>
+                        >
+                          Forgot password?
+                        </Link>
                     </div>
 
                     <Button

@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/tabs";
 
 const AUTH_TOKEN_KEY = "hireorbit_token";
+const ROLE_KEY = "hireorbit_role"; // ✅ store role here too
 
 function SignupPage() {
   const router = useRouter();
@@ -76,6 +77,7 @@ function SignupPage() {
         // Expect backend to return { token, user, ... }
         if (typeof window !== "undefined") {
           window.localStorage.setItem(AUTH_TOKEN_KEY, data.token);
+          window.localStorage.setItem(ROLE_KEY, role); // ✅ save role
         }
 
         toast.success(
@@ -154,6 +156,7 @@ function SignupPage() {
         // Expect backend to return { token, user, ... }
         if (typeof window !== "undefined") {
           window.localStorage.setItem(AUTH_TOKEN_KEY, data.token);
+          window.localStorage.setItem(ROLE_KEY, role); // ✅ save role
         }
 
         toast.success(
