@@ -2,12 +2,15 @@
 
 import React from "react";
 import { useRouter } from "next/navigation";
+import axios from "axios";
+import toast from "react-hot-toast";
 import {
   Briefcase,
   CalendarClock,
   CheckCircle2,
   Clock3,
   FileText,
+  Inbox,
   LayoutDashboard,
   Star,
   Users,
@@ -22,36 +25,253 @@ type Role = "candidate" | "employer";
 const AUTH_TOKEN_KEY = "hireorbit_token";
 const ROLE_KEY = "hireorbit_role";
 
+/* ---------- API RESPONSE TYPES ---------- */
+
+// What your /api/dashboard/candidate should return
+type CandidateDashboardResponse = {
+  stats: {
+    activeApplications: number;
+    upcomingInterviews: number;
+    savedJobs: number;
+  };
+  recentApplications: {
+    id: string;
+    company: string;
+    title: string;
+    status: string;
+    step: string;
+    updatedAt: string;
+  }[];
+  recommendedJobs: {
+    id: string;
+    company: string;
+    title: string;
+    type: string;
+  }[];
+};
+
+// What your /api/dashboard/employer should return
+type EmployerDashboardResponse = {
+  stats: {
+    openRoles: number;
+    activeCandidates: number;
+    interviewsThisWeek: number;
+  };
+  recentJobs: {
+    id: string;
+    title: string;
+    location: string;
+    status: "Open" | "Draft" | string;
+    applicants: number;
+    updatedAt: string;
+  }[];
+  pipeline: {
+    label: string;
+    count: number;
+  }[];
+};
+
+type DashboardData = CandidateDashboardResponse | EmployerDashboardResponse;
+
 export default function DashboardPage() {
   const router = useRouter();
-  const [role, setRole] = React.useState<Role>("candidate");
 
-  // Read role (and optionally token) from localStorage
+  const [role, setRole] = React.useState<Role | null>(null);
+  const [token, setToken] = React.useState<string | null>(null);
+  const [data, setData] = React.useState<DashboardData | null>(null);
+  const [loading, setLoading] = React.useState(true);
+
+  // 1) Read token + role from localStorage
   React.useEffect(() => {
     if (typeof window === "undefined") return;
 
+    const storedToken = window.localStorage.getItem(AUTH_TOKEN_KEY);
     const storedRole = window.localStorage.getItem(ROLE_KEY) as Role | null;
-    const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
 
-    if (!token) {
-      // Not logged in -> send to login
-      router.push("/login");
+    if (!storedToken) {
+      router.replace("/login");
       return;
     }
 
-    if (storedRole === "candidate" || storedRole === "employer") {
-      setRole(storedRole);
-    } else {
-      setRole("candidate");
-    }
+    setToken(storedToken);
+    setRole(
+      storedRole === "employer" || storedRole === "candidate"
+        ? storedRole
+        : "candidate"
+    );
   }, [router]);
 
+  // 2) Fetch dashboard data whenever role/token is ready
+  React.useEffect(() => {
+    if (!token || !role) return;
+
+    let cancelled = false;
+
+    const fetchDashboard = async () => {
+      try {
+        setLoading(true);
+
+        const url =
+          role === "candidate"
+            ? "/api/dashboard/candidate"
+            : "/api/dashboard/employer";
+
+        const res = await axios.get<DashboardData>(url, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!cancelled) {
+          // If backend returns empty object/null, treat as "no data"
+          const payload = res.data;
+          if (!payload || Object.keys(payload).length === 0) {
+            setData(null);
+          } else {
+            setData(payload);
+          }
+        }
+      } catch (error: any) {
+        if (!cancelled) {
+          console.error("Failed to load dashboard data:", error);
+          toast.error("Failed to load dashboard. Showing empty state.");
+          setData(null);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    fetchDashboard();
+
+    // Optional: polling for "real-time" updates
+    // const interval = setInterval(fetchDashboard, 30_000);
+    // return () => {
+    //   cancelled = true;
+    //   clearInterval(interval);
+    // };
+
+    return () => {
+      cancelled = true;
+    };
+  }, [role, token]);
+
+  // Still determining auth
+  if (!role || !token) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <p className="text-sm text-muted-foreground">Loading dashboard...</p>
+      </div>
+    );
+  }
+
+  // While fetching -> skeletons
+  if (loading) {
+    return (
+      <div className="flex min-h-[60vh] flex-col gap-4 p-4 md:p-6">
+        <div className="h-20 rounded-xl bg-muted animate-pulse" />
+        <div className="grid gap-3 md:grid-cols-3">
+          <div className="h-28 rounded-xl bg-muted animate-pulse" />
+          <div className="h-28 rounded-xl bg-muted animate-pulse" />
+          <div className="h-28 rounded-xl bg-muted animate-pulse" />
+        </div>
+        <div className="grid gap-4 lg:grid-cols-[2fr,1.4fr]">
+          <div className="h-64 rounded-xl bg-muted animate-pulse" />
+          <div className="h-64 rounded-xl bg-muted animate-pulse" />
+        </div>
+      </div>
+    );
+  }
+
+  // If loading is done but there's no data -> full-page empty state
+  if (!data) {
+    return (
+      <div className="flex flex-col gap-6 p-4 md:p-6">
+        <DashboardHeader role={role} />
+        <DashboardEmptyState role={role} />
+      </div>
+    );
+  }
+
+  const isCandidate = role === "candidate";
+  const candidateData = isCandidate
+    ? (data as CandidateDashboardResponse)
+    : null;
+  const employerData = !isCandidate
+    ? (data as EmployerDashboardResponse)
+    : null;
+
+  // Check if the returned data actually has content
+  const hasCandidateContent =
+    !!candidateData &&
+    (candidateData.stats.activeApplications > 0 ||
+      candidateData.stats.upcomingInterviews > 0 ||
+      candidateData.stats.savedJobs > 0 ||
+      candidateData.recentApplications.length > 0 ||
+      candidateData.recommendedJobs.length > 0);
+
+  const hasEmployerContent =
+    !!employerData &&
+    (employerData.stats.openRoles > 0 ||
+      employerData.stats.activeCandidates > 0 ||
+      employerData.stats.interviewsThisWeek > 0 ||
+      employerData.recentJobs.length > 0 ||
+      employerData.pipeline.length > 0);
+
   return (
-    // ❗ No sidebar, no outer flex with sidebar – layout will wrap this
     <div className="flex flex-col gap-6 p-4 md:p-6">
       <DashboardHeader role={role} />
-      <DashboardStatsRow role={role} />
-      <DashboardMainContent role={role} />
+
+      {isCandidate && candidateData && hasCandidateContent && (
+        <>
+          <DashboardStatsRow role="candidate" data={candidateData} />
+          <DashboardMainContent role="candidate" data={candidateData} />
+        </>
+      )}
+
+      {isCandidate && candidateData && !hasCandidateContent && (
+        <DashboardEmptyState role="candidate" />
+      )}
+
+      {!isCandidate && employerData && hasEmployerContent && (
+        <>
+          <DashboardStatsRow role="employer" data={employerData} />
+          <DashboardMainContent role="employer" data={employerData} />
+        </>
+      )}
+
+      {!isCandidate && employerData && !hasEmployerContent && (
+        <DashboardEmptyState role="employer" />
+      )}
+    </div>
+  );
+}
+
+/* ---------- EMPTY STATE (full page) ---------- */
+
+function DashboardEmptyState({ role }: { role: Role }) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center rounded-xl border bg-background/60 px-6 py-10 text-center">
+      <Inbox className="mb-3 h-8 w-8 text-muted-foreground" />
+      <h2 className="text-base font-semibold">
+        {role === "candidate"
+          ? "No activity yet"
+          : "No hiring activity yet"}
+      </h2>
+      <p className="mt-1 max-w-md text-sm text-muted-foreground">
+        {role === "candidate"
+          ? "When you start applying to jobs, your applications and recommendations will appear here."
+          : "Once you create job posts and start receiving candidates, your hiring activity will show up here."}
+      </p>
+      {role === "candidate" ? (
+        <Button className="mt-4 rounded-full" size="sm">
+          Browse jobs
+        </Button>
+      ) : (
+        <Button className="mt-4 rounded-full" size="sm">
+          Post your first job
+        </Button>
+      )}
     </div>
   );
 }
@@ -108,7 +328,7 @@ function StatCard({
 }: {
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
   label: string;
-  value: string;
+  value: string | number;
   hint?: string;
 }) {
   return (
@@ -121,61 +341,73 @@ function StatCard({
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-semibold">{value}</div>
-        {hint && (
-          <p className="mt-1 text-xs text-muted-foreground">
-            {hint}
-          </p>
-        )}
+        {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
       </CardContent>
     </Card>
   );
 }
 
-function DashboardStatsRow({ role }: { role: Role }) {
+function DashboardStatsRow({
+  role,
+  data,
+}: {
+  role: Role;
+  data: CandidateDashboardResponse | EmployerDashboardResponse;
+}) {
   return (
     <section className="grid gap-3 md:grid-cols-3">
       {role === "candidate" ? (
-        <>
-          <StatCard
-            icon={Briefcase}
-            label="Active applications"
-            value="4"
-            hint="You have 2 interviews scheduled this week."
-          />
-          <StatCard
-            icon={CalendarClock}
-            label="Upcoming interviews"
-            value="2"
-            hint="Next interview: Wed · 3:00 PM"
-          />
-          <StatCard
-            icon={Star}
-            label="Saved jobs"
-            value="9"
-            hint="Don’t forget to apply before they expire."
-          />
-        </>
+        (() => {
+          const d = data as CandidateDashboardResponse;
+          return (
+            <>
+              <StatCard
+                icon={Briefcase}
+                label="Active applications"
+                value={d.stats.activeApplications}
+                hint="You have applications currently in progress."
+              />
+              <StatCard
+                icon={CalendarClock}
+                label="Upcoming interviews"
+                value={d.stats.upcomingInterviews}
+                hint="Check your inbox for interview details."
+              />
+              <StatCard
+                icon={Star}
+                label="Saved jobs"
+                value={d.stats.savedJobs}
+                hint="Don’t forget to apply before they expire."
+              />
+            </>
+          );
+        })()
       ) : (
-        <>
-          <StatCard
-            icon={Briefcase}
-            label="Open roles"
-            value="6"
-            hint="2 roles have draft candidates waiting review."
-          />
-          <StatCard
-            icon={Users}
-            label="Active candidates"
-            value="27"
-            hint="Across all open roles this month."
-          />
-          <StatCard
-            icon={CalendarClock}
-            label="Interviews this week"
-            value="5"
-            hint="Keep your pipeline moving forward."
-          />
-        </>
+        (() => {
+          const d = data as EmployerDashboardResponse;
+          return (
+            <>
+              <StatCard
+                icon={Briefcase}
+                label="Open roles"
+                value={d.stats.openRoles}
+                hint="Roles currently visible to candidates."
+              />
+              <StatCard
+                icon={Users}
+                label="Active candidates"
+                value={d.stats.activeCandidates}
+                hint="Across all open roles this month."
+              />
+              <StatCard
+                icon={CalendarClock}
+                label="Interviews this week"
+                value={d.stats.interviewsThisWeek}
+                hint="Keep your pipeline moving forward."
+              />
+            </>
+          );
+        })()
       )}
     </section>
   );
@@ -183,18 +415,33 @@ function DashboardStatsRow({ role }: { role: Role }) {
 
 /* ---------- MAIN CONTENT ---------- */
 
-function DashboardMainContent({ role }: { role: Role }) {
+function DashboardMainContent({
+  role,
+  data,
+}: {
+  role: Role;
+  data: CandidateDashboardResponse | EmployerDashboardResponse;
+}) {
   return (
     <section className="grid gap-4 lg:grid-cols-[2fr,1.4fr]">
       {role === "candidate" ? (
         <>
-          <CandidateApplicationsPanel />
-          <CandidateRecommendedJobsPanel />
+          <CandidateApplicationsPanel
+            applications={(data as CandidateDashboardResponse)
+              .recentApplications}
+          />
+          <CandidateRecommendedJobsPanel
+            jobs={(data as CandidateDashboardResponse).recommendedJobs}
+          />
         </>
       ) : (
         <>
-          <EmployerJobsPanel />
-          <EmployerPipelinePanel />
+          <EmployerJobsPanel
+            jobs={(data as EmployerDashboardResponse).recentJobs}
+          />
+          <EmployerPipelinePanel
+            stages={(data as EmployerDashboardResponse).pipeline}
+          />
         </>
       )}
     </section>
@@ -203,31 +450,11 @@ function DashboardMainContent({ role }: { role: Role }) {
 
 /* ---------- CANDIDATE PANELS ---------- */
 
-function CandidateApplicationsPanel() {
-  const items = [
-    {
-      company: "Orbit Labs",
-      title: "Frontend Engineer",
-      status: "Interview",
-      step: "2nd round · Hiring Manager",
-      updated: "2 days ago",
-    },
-    {
-      company: "NovaPay",
-      title: "React Developer",
-      status: "Applied",
-      step: "Application received",
-      updated: "5 days ago",
-    },
-    {
-      company: "Skyline Systems",
-      title: "Full-Stack Engineer",
-      status: "Screening",
-      step: "Recruiter reviewing",
-      updated: "1 day ago",
-    },
-  ];
-
+function CandidateApplicationsPanel({
+  applications,
+}: {
+  applications: CandidateDashboardResponse["recentApplications"];
+}) {
   return (
     <Card className="flex h-full flex-col border bg-background shadow-sm">
       <CardHeader>
@@ -240,9 +467,15 @@ function CandidateApplicationsPanel() {
       </CardHeader>
 
       <CardContent className="space-y-3">
-        {items.map((item, idx) => (
+        {applications.length === 0 && (
+          <p className="text-xs text-muted-foreground">
+            You haven&apos;t applied to any jobs yet.
+          </p>
+        )}
+
+        {applications.map((item) => (
           <div
-            key={idx}
+            key={item.id}
             className="flex flex-col gap-1 rounded-lg border px-3 py-2.5 text-sm hover:bg-muted/50"
           >
             <div className="flex items-center justify-between gap-2">
@@ -253,7 +486,7 @@ function CandidateApplicationsPanel() {
             </div>
             <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
               <span>{item.company}</span>
-              <span>{item.updated}</span>
+              <span>{item.updatedAt}</span>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">{item.step}</p>
           </div>
@@ -271,25 +504,11 @@ function CandidateApplicationsPanel() {
   );
 }
 
-function CandidateRecommendedJobsPanel() {
-  const jobs = [
-    {
-      company: "NebulaWorks",
-      title: "Senior React Engineer",
-      type: "Full-time · Remote",
-    },
-    {
-      company: "Aurora Health",
-      title: "Frontend Developer",
-      type: "Hybrid · Bengaluru",
-    },
-    {
-      company: "PixelCraft",
-      title: "UI Engineer",
-      type: "On-site · Pune",
-    },
-  ];
-
+function CandidateRecommendedJobsPanel({
+  jobs,
+}: {
+  jobs: CandidateDashboardResponse["recommendedJobs"];
+}) {
   return (
     <Card className="flex h-full flex-col border bg-background shadow-sm">
       <CardHeader>
@@ -302,9 +521,16 @@ function CandidateRecommendedJobsPanel() {
       </CardHeader>
 
       <CardContent className="space-y-3">
-        {jobs.map((job, idx) => (
+        {jobs.length === 0 && (
+          <p className="text-xs text-muted-foreground">
+            We don&apos;t have any recommendations yet. Start applying or
+            updating your profile.
+          </p>
+        )}
+
+        {jobs.map((job) => (
           <div
-            key={idx}
+            key={job.id}
             className="flex flex-col gap-1 rounded-lg border px-3 py-2.5 text-sm hover:bg-muted/50"
           >
             <div className="flex items-center justify-between gap-2">
@@ -344,31 +570,11 @@ function CandidateRecommendedJobsPanel() {
 
 /* ---------- EMPLOYER PANELS ---------- */
 
-function EmployerJobsPanel() {
-  const jobs = [
-    {
-      title: "Senior Frontend Engineer",
-      location: "Remote · India",
-      status: "Open",
-      applicants: 18,
-      updated: "Today",
-    },
-    {
-      title: "Product Designer",
-      location: "Hybrid · Bengaluru",
-      status: "Open",
-      applicants: 9,
-      updated: "2 days ago",
-    },
-    {
-      title: "Full-Stack Engineer",
-      location: "On-site · Mumbai",
-      status: "Draft",
-      applicants: 0,
-      updated: "Just now",
-    },
-  ];
-
+function EmployerJobsPanel({
+  jobs,
+}: {
+  jobs: EmployerDashboardResponse["recentJobs"];
+}) {
   return (
     <Card className="flex h-full flex-col border bg-background shadow-sm">
       <CardHeader>
@@ -381,9 +587,15 @@ function EmployerJobsPanel() {
       </CardHeader>
 
       <CardContent className="space-y-3">
-        {jobs.map((job, idx) => (
+        {jobs.length === 0 && (
+          <p className="text-xs text-muted-foreground">
+            You haven&apos;t posted any jobs yet.
+          </p>
+        )}
+
+        {jobs.map((job) => (
           <div
-            key={idx}
+            key={job.id}
             className="flex flex-col gap-1 rounded-lg border px-3 py-2.5 text-sm hover:bg-muted/50"
           >
             <div className="flex items-center justify-between gap-2">
@@ -401,7 +613,7 @@ function EmployerJobsPanel() {
             <p className="text-xs text-muted-foreground">{job.location}</p>
             <div className="mt-1 flex items-center justify-between gap-2 text-xs text-muted-foreground">
               <span>{job.applicants} applicants</span>
-              <span>Updated {job.updated}</span>
+              <span>Updated {job.updatedAt}</span>
             </div>
           </div>
         ))}
@@ -418,30 +630,11 @@ function EmployerJobsPanel() {
   );
 }
 
-function EmployerPipelinePanel() {
-  const stages = [
-    {
-      label: "New",
-      count: 12,
-      icon: FileText,
-    },
-    {
-      label: "Screening",
-      count: 8,
-      icon: Users,
-    },
-    {
-      label: "Interviewing",
-      count: 5,
-      icon: CalendarClock,
-    },
-    {
-      label: "Offers",
-      count: 2,
-      icon: CheckCircle2,
-    },
-  ];
-
+function EmployerPipelinePanel({
+  stages,
+}: {
+  stages: EmployerDashboardResponse["pipeline"];
+}) {
   return (
     <Card className="flex h-full flex-col border bg-background shadow-sm">
       <CardHeader>
@@ -454,11 +647,17 @@ function EmployerPipelinePanel() {
       </CardHeader>
 
       <CardContent className="space-y-3">
+        {stages.length === 0 && (
+          <p className="text-xs text-muted-foreground">
+            No candidates in the pipeline yet.
+          </p>
+        )}
+
         {stages.map((stage, idx) => {
-          const Icon = stage.icon;
+          const Icon = [FileText, Users, CalendarClock, CheckCircle2][idx] || FileText;
           return (
             <div
-              key={idx}
+              key={stage.label}
               className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5 text-sm hover:bg-muted/50"
             >
               <div className="flex items-center gap-2">
