@@ -141,6 +141,7 @@ export const applications = pgTable(
 export const savedJobs = pgTable(
   "saved_jobs",
   {
+    id: uuid("id").defaultRandom().primaryKey(),
     candidateId: uuid("candidate_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -151,10 +152,12 @@ export const savedJobs = pgTable(
 
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => ({
-    pk: primaryKey({ columns: [t.candidateId, t.jobId] }),
-    savedJobsCandidateIdx: index("saved_jobs_candidate_id_idx").on(t.candidateId),
-    savedJobsJobIdx: index("saved_jobs_job_id_idx").on(t.jobId),
+  (table) => ({
+    // Prevent duplicates: same candidate saving the same job multiple times
+    candidateJobUnique: uniqueIndex("saved_jobs_candidate_job_unique").on(
+      table.candidateId,
+      table.jobId
+    ),
   })
 );
 
@@ -296,3 +299,50 @@ export const employerProfilesRelations = relations(employerProfiles, ({ one }) =
     references: [users.id],
   }),
 }));
+
+
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: uuid("id").defaultRandom().primaryKey(),
+
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+
+  otpHash: varchar("otp_hash", { length: 255 }).notNull(),
+
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+
+  used: boolean("used").notNull().default(false),
+
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+
+export const userSettings = pgTable("user_settings", {
+  // One settings row per user
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+
+  // Notifications
+  jobAlertsEmail: boolean("job_alerts_email").notNull().default(true),
+  jobAlertsPush: boolean("job_alerts_push").notNull().default(true),
+  activityEmails: boolean("activity_emails").notNull().default(true),
+  marketingEmails: boolean("marketing_emails").notNull().default(false),
+
+  // Security
+  loginAlerts: boolean("login_alerts").notNull().default(true),
+  twoFactor: boolean("two_factor").notNull().default(false),
+
+  // UI
+  theme: varchar("theme", { length: 20 }).notNull().default("system"), // "system" | "light" | "dark"
+
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});

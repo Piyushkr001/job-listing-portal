@@ -13,8 +13,6 @@ import {
   Phone,
   MapPin,
   Save,
-  // Below are only used as text; remove if you don't use those cards
-  Briefcase,
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,7 +26,30 @@ type Role = "candidate" | "employer";
 const AUTH_TOKEN_KEY = "hireorbit_token";
 const ROLE_KEY = "hireorbit_role";
 
-/* ---------- API Types ---------- */
+/* ---------- API Types (aligned with new /api/profile) ---------- */
+
+type CandidateProfile = {
+  phone: string;
+  location: string;
+  website: string;
+  headline: string;
+  bio: string;
+  experienceYears: number | null;
+  preferredTitle: string;
+  preferredLocation: string;
+  salaryRange: string;
+  skills: string[];
+};
+
+type EmployerProfile = {
+  companyWebsite: string;
+  companySize: string;
+  companyBio: string;
+  hiringLocations: string;
+  hiringFocus: string;
+  hiringNotes: string;
+};
+
 type ProfileGetResponse = {
   user: {
     id: string;
@@ -38,12 +59,8 @@ type ProfileGetResponse = {
     companyName: string | null;
     provider: "credentials" | "google";
   };
-  profile: {
-    location: string;
-    website: string;
-    headline: string;
-    bio: string;
-  };
+  profile: CandidateProfile | null;
+  employerProfile: EmployerProfile | null;
 };
 
 export default function ProfilePage() {
@@ -55,14 +72,31 @@ export default function ProfilePage() {
   // Source of truth for role comes from API
   const [role, setRole] = React.useState<Role | null>(null);
 
-  // Controlled fields we actually persist (supported by your current schema)
+  // Shared user-level fields
   const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState(""); // read-only
   const [companyName, setCompanyName] = React.useState<string>("");
 
-  // Optional local-only fields (for UI; not persisted yet)
+  // Candidate fields
   const [phone, setPhone] = React.useState("");
   const [location, setLocation] = React.useState("");
+  const [website, setWebsite] = React.useState("");
+  const [headline, setHeadline] = React.useState("");
+  const [bio, setBio] = React.useState("");
+  const [experienceYears, setExperienceYears] = React.useState(""); // string for input
+  const [preferredTitle, setPreferredTitle] = React.useState("");
+  const [preferredLocation, setPreferredLocation] = React.useState("");
+  const [salaryRange, setSalaryRange] = React.useState("");
+  const [skills, setSkills] = React.useState<string[]>([]);
+  const [newSkill, setNewSkill] = React.useState("");
+
+  // Employer fields
+  const [companyWebsite, setCompanyWebsite] = React.useState("");
+  const [companySize, setCompanySize] = React.useState("");
+  const [companyBio, setCompanyBio] = React.useState("");
+  const [hiringLocations, setHiringLocations] = React.useState("");
+  const [hiringFocus, setHiringFocus] = React.useState("");
+  const [hiringNotes, setHiringNotes] = React.useState("");
 
   // Auth + initial load
   React.useEffect(() => {
@@ -90,9 +124,31 @@ export default function ProfilePage() {
         setEmail(data.user.email || "");
         setCompanyName(data.user.companyName ?? "");
 
-        // optional local-only placeholders
-        setLocation(data.profile.location || "");
-        // phone is not in API yet; keep whatever user typed last session if you store it locally
+        if (data.user.role === "candidate" && data.profile) {
+          const p = data.profile;
+          setPhone(p.phone ?? "");
+          setLocation(p.location ?? "");
+          setWebsite(p.website ?? "");
+          setHeadline(p.headline ?? "");
+          setBio(p.bio ?? "");
+          setExperienceYears(
+            p.experienceYears != null ? String(p.experienceYears) : ""
+          );
+          setPreferredTitle(p.preferredTitle ?? "");
+          setPreferredLocation(p.preferredLocation ?? "");
+          setSalaryRange(p.salaryRange ?? "");
+          setSkills(p.skills ?? []);
+        }
+
+        if (data.user.role === "employer" && data.employerProfile) {
+          const ep = data.employerProfile;
+          setCompanyWebsite(ep.companyWebsite ?? "");
+          setCompanySize(ep.companySize ?? "");
+          setCompanyBio(ep.companyBio ?? "");
+          setHiringLocations(ep.hiringLocations ?? "");
+          setHiringFocus(ep.hiringFocus ?? "");
+          setHiringNotes(ep.hiringNotes ?? "");
+        }
 
         // keep localStorage role in sync for the rest of your app
         window.localStorage.setItem(ROLE_KEY, data.user.role);
@@ -115,6 +171,21 @@ export default function ProfilePage() {
     };
   }, [router]);
 
+  const isCandidate = role === "candidate";
+
+  const handleAddSkill = () => {
+    const value = newSkill.trim();
+    if (!value) return;
+    if (!skills.includes(value)) {
+      setSkills((prev) => [...prev, value]);
+    }
+    setNewSkill("");
+  };
+
+  const handleRemoveSkill = (skillToRemove: string) => {
+    setSkills((prev) => prev.filter((s) => s !== skillToRemove));
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!role) return;
@@ -127,10 +198,39 @@ export default function ProfilePage() {
         return;
       }
 
-      // Only send fields your schema currently supports
-      const payload: { name?: string; companyName?: string } = {};
-      if (name.trim()) payload.name = name.trim();
-      if (role === "employer") payload.companyName = companyName.trim();
+      let payload: any = {
+        name: name.trim(),
+      };
+
+      if (role === "candidate") {
+        payload = {
+          ...payload,
+          phone: phone.trim(),
+          location: location.trim(),
+          website: website.trim(),
+          headline: headline.trim(),
+          bio: bio.trim(),
+          experienceYears:
+            experienceYears.trim() === ""
+              ? null
+              : Number(experienceYears.trim()),
+          preferredTitle: preferredTitle.trim(),
+          preferredLocation: preferredLocation.trim(),
+          salaryRange: salaryRange.trim(),
+          skills,
+        };
+      } else if (role === "employer") {
+        payload = {
+          ...payload,
+          companyName: companyName.trim(),
+          companyWebsite: companyWebsite.trim(),
+          companySize: companySize.trim(),
+          companyBio: companyBio.trim(),
+          hiringLocations: hiringLocations.trim(),
+          hiringFocus: hiringFocus.trim(),
+          hiringNotes: hiringNotes.trim(),
+        };
+      }
 
       await axios.patch("/api/profile", payload, {
         headers: { Authorization: `Bearer ${token}` },
@@ -159,8 +259,6 @@ export default function ProfilePage() {
     );
   }
 
-  const isCandidate = role === "candidate";
-
   return (
     <div className="flex flex-col gap-6 p-4 md:p-6">
       <ProfileHeader role={role} saving={saving} />
@@ -186,19 +284,57 @@ export default function ProfilePage() {
               location={location}
               setLocation={setLocation}
             />
-            {isCandidate ? <CandidateAboutCard /> : <EmployerAboutCard />}
+            {isCandidate ? (
+              <CandidateAboutCard
+                headline={headline}
+                setHeadline={setHeadline}
+                bio={bio}
+                setBio={setBio}
+                experienceYears={experienceYears}
+                setExperienceYears={setExperienceYears}
+              />
+            ) : (
+              <EmployerAboutCard
+                companyWebsite={companyWebsite}
+                setCompanyWebsite={setCompanyWebsite}
+                companySize={companySize}
+                setCompanySize={setCompanySize}
+                companyBio={companyBio}
+                setCompanyBio={setCompanyBio}
+              />
+            )}
           </div>
 
           {/* RIGHT COLUMN */}
           <div className="flex flex-col gap-4">
             {isCandidate ? (
               <>
-                <CandidatePreferencesCard />
-                <CandidateSkillsCard />
+                <CandidatePreferencesCard
+                  preferredTitle={preferredTitle}
+                  setPreferredTitle={setPreferredTitle}
+                  preferredLocation={preferredLocation}
+                  setPreferredLocation={setPreferredLocation}
+                  salaryRange={salaryRange}
+                  setSalaryRange={setSalaryRange}
+                />
+                <CandidateSkillsCard
+                  skills={skills}
+                  newSkill={newSkill}
+                  setNewSkill={setNewSkill}
+                  onAddSkill={handleAddSkill}
+                  onRemoveSkill={handleRemoveSkill}
+                />
               </>
             ) : (
               <>
-                <EmployerPreferencesCard />
+                <EmployerPreferencesCard
+                  hiringLocations={hiringLocations}
+                  setHiringLocations={setHiringLocations}
+                  hiringFocus={hiringFocus}
+                  setHiringFocus={setHiringFocus}
+                  hiringNotes={hiringNotes}
+                  setHiringNotes={setHiringNotes}
+                />
                 <EmployerSnapshotCard />
               </>
             )}
@@ -384,7 +520,21 @@ function BasicDetailsCard({
 
 /* ---------- CANDIDATE "ABOUT" CARD ---------- */
 
-function CandidateAboutCard() {
+function CandidateAboutCard({
+  headline,
+  setHeadline,
+  bio,
+  setBio,
+  experienceYears,
+  setExperienceYears,
+}: {
+  headline: string;
+  setHeadline: (v: string) => void;
+  bio: string;
+  setBio: (v: string) => void;
+  experienceYears: string;
+  setExperienceYears: (v: string) => void;
+}) {
   return (
     <Card className="border bg-background shadow-sm">
       <CardHeader>
@@ -398,6 +548,8 @@ function CandidateAboutCard() {
             name="headline"
             placeholder="Frontend Engineer · React · TypeScript"
             className="bg-card"
+            value={headline}
+            onChange={(e) => setHeadline(e.target.value)}
           />
         </div>
 
@@ -409,6 +561,8 @@ function CandidateAboutCard() {
             rows={4}
             placeholder="Briefly describe your experience, skills, and what you're looking for next..."
             className="min-h-24 w-full rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-1"
+            value={bio}
+            onChange={(e) => setBio(e.target.value)}
           />
         </div>
 
@@ -421,6 +575,8 @@ function CandidateAboutCard() {
             min={0}
             placeholder="3"
             className="bg-card"
+            value={experienceYears}
+            onChange={(e) => setExperienceYears(e.target.value)}
           />
         </div>
       </CardContent>
@@ -430,7 +586,21 @@ function CandidateAboutCard() {
 
 /* ---------- EMPLOYER "ABOUT" CARD ---------- */
 
-function EmployerAboutCard() {
+function EmployerAboutCard({
+  companyWebsite,
+  setCompanyWebsite,
+  companySize,
+  setCompanySize,
+  companyBio,
+  setCompanyBio,
+}: {
+  companyWebsite: string;
+  setCompanyWebsite: (v: string) => void;
+  companySize: string;
+  setCompanySize: (v: string) => void;
+  companyBio: string;
+  setCompanyBio: (v: string) => void;
+}) {
   return (
     <Card className="border bg-background shadow-sm">
       <CardHeader>
@@ -444,6 +614,8 @@ function EmployerAboutCard() {
             name="companyWebsite"
             placeholder="https://yourcompany.com"
             className="bg-card"
+            value={companyWebsite}
+            onChange={(e) => setCompanyWebsite(e.target.value)}
           />
         </div>
 
@@ -454,6 +626,8 @@ function EmployerAboutCard() {
             name="companySize"
             placeholder="11–50 employees"
             className="bg-card"
+            value={companySize}
+            onChange={(e) => setCompanySize(e.target.value)}
           />
         </div>
 
@@ -465,6 +639,8 @@ function EmployerAboutCard() {
             rows={4}
             placeholder="Describe your product, mission, and what it's like to work at your company..."
             className="min-h-24 w-full rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-1"
+            value={companyBio}
+            onChange={(e) => setCompanyBio(e.target.value)}
           />
         </div>
       </CardContent>
@@ -474,7 +650,21 @@ function EmployerAboutCard() {
 
 /* ---------- CANDIDATE PREFERENCES ---------- */
 
-function CandidatePreferencesCard() {
+function CandidatePreferencesCard({
+  preferredTitle,
+  setPreferredTitle,
+  preferredLocation,
+  setPreferredLocation,
+  salaryRange,
+  setSalaryRange,
+}: {
+  preferredTitle: string;
+  setPreferredTitle: (v: string) => void;
+  preferredLocation: string;
+  setPreferredLocation: (v: string) => void;
+  salaryRange: string;
+  setSalaryRange: (v: string) => void;
+}) {
   return (
     <Card className="border bg-background shadow-sm">
       <CardHeader>
@@ -488,6 +678,8 @@ function CandidatePreferencesCard() {
             name="preferredTitle"
             placeholder="Frontend Engineer, UI Engineer"
             className="bg-card"
+            value={preferredTitle}
+            onChange={(e) => setPreferredTitle(e.target.value)}
           />
         </div>
 
@@ -498,6 +690,8 @@ function CandidatePreferencesCard() {
             name="preferredLocation"
             placeholder="Remote · Bengaluru · Pune"
             className="bg-card"
+            value={preferredLocation}
+            onChange={(e) => setPreferredLocation(e.target.value)}
           />
         </div>
 
@@ -508,6 +702,8 @@ function CandidatePreferencesCard() {
             name="salaryRange"
             placeholder="₹12–18 LPA"
             className="bg-card"
+            value={salaryRange}
+            onChange={(e) => setSalaryRange(e.target.value)}
           />
         </div>
       </CardContent>
@@ -517,7 +713,19 @@ function CandidatePreferencesCard() {
 
 /* ---------- CANDIDATE SKILLS ---------- */
 
-function CandidateSkillsCard() {
+function CandidateSkillsCard({
+  skills,
+  newSkill,
+  setNewSkill,
+  onAddSkill,
+  onRemoveSkill,
+}: {
+  skills: string[];
+  newSkill: string;
+  setNewSkill: (v: string) => void;
+  onAddSkill: () => void;
+  onRemoveSkill: (skill: string) => void;
+}) {
   const exampleSkills = ["React", "TypeScript", "Next.js", "Tailwind", "Node.js"];
 
   return (
@@ -532,26 +740,64 @@ function CandidateSkillsCard() {
         </p>
 
         <div className="flex flex-wrap gap-2">
-          {exampleSkills.map((skill) => (
-            <span
-              key={skill}
-              className="inline-flex items-center rounded-full border bg-card px-3 py-1 text-[11px] font-medium"
-            >
-              {skill}
+          {skills.length === 0 ? (
+            <span className="text-xs text-muted-foreground">
+              No skills added yet.
             </span>
-          ))}
+          ) : (
+            skills.map((skill) => (
+              <button
+                key={skill}
+                type="button"
+                onClick={() => onRemoveSkill(skill)}
+                className="inline-flex items-center gap-1 rounded-full border bg-card px-3 py-1 text-[11px] font-medium"
+              >
+                <span>{skill}</span>
+                <span className="text-muted-foreground">×</span>
+              </button>
+            ))
+          )}
         </div>
 
         <Separator className="my-2" />
 
         <div className="space-y-1.5">
           <Label htmlFor="newSkill">Add another skill</Label>
-          <Input
-            id="newSkill"
-            name="newSkill"
-            placeholder="e.g. GraphQL, Redux, Testing Library..."
-            className="bg-card"
-          />
+          <div className="flex gap-2">
+            <Input
+              id="newSkill"
+              name="newSkill"
+              placeholder="e.g. GraphQL, Redux, Testing Library..."
+              className="bg-card"
+              value={newSkill}
+              onChange={(e) => setNewSkill(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  onAddSkill();
+                }
+              }}
+            />
+            <Button type="button" size="sm" onClick={onAddSkill}>
+              Add
+            </Button>
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <p className="text-[11px] text-muted-foreground">
+            Suggestions (not clickable, just examples):
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {exampleSkills.map((skill) => (
+              <span
+                key={skill}
+                className="inline-flex items-center rounded-full border bg-card px-3 py-1 text-[11px] font-medium"
+              >
+                {skill}
+              </span>
+            ))}
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -560,7 +806,21 @@ function CandidateSkillsCard() {
 
 /* ---------- EMPLOYER PREFERENCES ---------- */
 
-function EmployerPreferencesCard() {
+function EmployerPreferencesCard({
+  hiringLocations,
+  setHiringLocations,
+  hiringFocus,
+  setHiringFocus,
+  hiringNotes,
+  setHiringNotes,
+}: {
+  hiringLocations: string;
+  setHiringLocations: (v: string) => void;
+  hiringFocus: string;
+  setHiringFocus: (v: string) => void;
+  hiringNotes: string;
+  setHiringNotes: (v: string) => void;
+}) {
   return (
     <Card className="border bg-background shadow-sm">
       <CardHeader>
@@ -576,6 +836,8 @@ function EmployerPreferencesCard() {
             name="hiringLocations"
             placeholder="Remote · Bengaluru · Mumbai"
             className="bg-card"
+            value={hiringLocations}
+            onChange={(e) => setHiringLocations(e.target.value)}
           />
         </div>
 
@@ -586,6 +848,8 @@ function EmployerPreferencesCard() {
             name="hiringFocus"
             placeholder="Frontend, Backend, Design, Product..."
             className="bg-card"
+            value={hiringFocus}
+            onChange={(e) => setHiringFocus(e.target.value)}
           />
         </div>
 
@@ -597,6 +861,8 @@ function EmployerPreferencesCard() {
             rows={3}
             placeholder="Share what you value in candidates, interview process highlights, etc."
             className="min-h-20 w-full rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-1"
+            value={hiringNotes}
+            onChange={(e) => setHiringNotes(e.target.value)}
           />
         </div>
       </CardContent>

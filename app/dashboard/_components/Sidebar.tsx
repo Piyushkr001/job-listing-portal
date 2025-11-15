@@ -66,6 +66,11 @@ const employerNav: NavItem[] = [
     icon: LayoutDashboard,
   },
   {
+    label: "My Profile",
+    href: "/dashboard/profile",
+    icon: User,
+  },
+  {
     label: "Job Posts",
     href: "/dashboard/jobs",
     icon: Briefcase,
