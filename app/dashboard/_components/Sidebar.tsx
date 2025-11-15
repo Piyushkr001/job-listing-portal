@@ -77,7 +77,7 @@ const employerNav: NavItem[] = [
   },
   {
     label: "Post a Job",
-    href: "/dashboard/jobs/new",
+    href: "/dashboard/jobs-new",
     icon: FileText,
   },
   {
@@ -113,11 +113,13 @@ export function DashboardSidebar({ role }: DashboardSidebarProps) {
   return (
     <aside className="flex h-screen w-64 flex-col border-r bg-background">
       {/* Top brand / role */}
-      <div className="flex items-center justify-between gap-2 px-4 py-4 border-b">
+      <div className="flex items-center justify-between gap-2 border-b px-4 py-4">
         <div className="flex flex-col">
           <span className="text-sm font-semibold">HireOrbit</span>
           <span className="text-xs text-muted-foreground">
-            {role === "candidate" ? "Candidate Dashboard" : "Employer Dashboard"}
+            {role === "candidate"
+              ? "Candidate Dashboard"
+              : "Employer Dashboard"}
           </span>
         </div>
       </div>
@@ -126,12 +128,15 @@ export function DashboardSidebar({ role }: DashboardSidebarProps) {
       <ScrollArea className="flex-1">
         <nav className="flex flex-col gap-1 px-2 py-3">
           {navItems.map((item) => {
-            const isActive =
-              item.href === "/dashboard"
-                ? pathname === "/dashboard"
-                : pathname.startsWith(item.href);
-
             const Icon = item.icon;
+
+            // ✅ Fixed active logic
+            const isDashboardRoot = item.href === "/dashboard";
+
+            const isActive = isDashboardRoot
+              ? pathname === "/dashboard"
+              : pathname === item.href ||
+                pathname.startsWith(`${item.href}/`);
 
             return (
               <Button
