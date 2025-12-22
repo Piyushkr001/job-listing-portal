@@ -27,11 +27,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 type Role = "candidate" | "employer";
-type Theme = "system" | "light" | "dark";
 
-// Reuse these keys from your other pages
 const AUTH_TOKEN_KEY = "hireorbit_token";
 const ROLE_KEY = "hireorbit_role";
 
@@ -50,7 +58,7 @@ type JobDetail = {
   postedAt: string; // ISO string
   applicationDeadline?: string | null;
   experienceLevel?: string | null;
-  skills?: string[]; // tags
+  skills?: string[];
   description: string;
   responsibilities?: string[];
   requirements?: string[];
@@ -63,42 +71,59 @@ type JobDetail = {
 
 export default function JobDetailPage() {
   const router = useRouter();
-  const params = useParams<{ id: string }>();
+  const params = useParams();
 
-  const jobId = params?.id as string;
+  // Handle both string and string[]
+  const jobId = React.useMemo(() => {
+    const raw = (params as any)?.id;
+    if (!raw) return undefined;
+    return Array.isArray(raw) ? raw[0] : (raw as string);
+  }, [params]);
 
   const [role, setRole] = React.useState<Role | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [job, setJob] = React.useState<JobDetail | null>(null);
   const [saving, setSaving] = React.useState(false);
   const [applying, setApplying] = React.useState(false);
+  const [withdrawing, setWithdrawing] = React.useState(false);
+
+  const [isApplyDialogOpen, setIsApplyDialogOpen] = React.useState(false);
+  const [resumeFile, setResumeFile] = React.useState<File | null>(null);
 
   React.useEffect(() => {
-    if (!jobId) return;
-    if (typeof window === "undefined") return;
+    if (!jobId) {
+      toast.error("Invalid job URL.");
+      router.replace("/jobs");
+      return;
+    }
 
-    const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
+    const token =
+      typeof window !== "undefined"
+        ? window.localStorage.getItem(AUTH_TOKEN_KEY)
+        : null;
+
     if (!token) {
       router.replace("/login");
       return;
     }
 
-    const storedRole = window.localStorage.getItem(ROLE_KEY) as Role | null;
-    setRole(storedRole);
+    if (typeof window !== "undefined") {
+      const storedRole = window.localStorage.getItem(ROLE_KEY) as Role | null;
+      setRole(storedRole);
+    }
 
-    let cancelled = false;
+    const controller = new AbortController();
 
     const loadJob = async () => {
       try {
         setLoading(true);
 
-        const { data } = await axios.get<JobDetail>(`/api/jobs/${jobId}`, {
+        const url = `/api/jobs/${encodeURIComponent(jobId)}`;
+        const { data } = await axios.get<JobDetail>(url, {
           headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
         });
 
-        if (cancelled) return;
-
-        // Normalize some fields
         const workMode: WorkMode = (data.workMode || "onsite") as WorkMode;
         const jobType: JobType = (data.jobType || "full-time") as JobType;
 
@@ -113,18 +138,32 @@ export default function JobDetailPage() {
           isSaved: data.isSaved ?? false,
           isApplied: data.isApplied ?? false,
         });
-      } catch (error) {
+      } catch (error: any) {
+        if (axios.isCancel(error)) return;
+
         console.error("[JobDetail] load error:", error);
-        toast.error("Failed to load job. Please try again.");
+
+        const status = error?.response?.status;
+        if (status === 404) {
+          toast.error("Job not found.");
+        } else if (status === 401) {
+          toast.error("Your session has expired. Please log in again.");
+          router.replace("/login");
+          return;
+        } else {
+          toast.error("Failed to load job. Please try again.");
+        }
+
         router.replace("/jobs");
       } finally {
-        if (!cancelled) setLoading(false);
+        setLoading(false);
       }
     };
 
     loadJob();
+
     return () => {
-      cancelled = true;
+      controller.abort();
     };
   }, [jobId, router]);
 
@@ -155,7 +194,9 @@ export default function JobDetailPage() {
         toast.success("Job added to saved.");
       }
 
-      setJob((prev) => (prev ? { ...prev, isSaved: !prev.isSaved } : prev));
+      setJob((prev) =>
+        prev ? { ...prev, isSaved: !prev.isSaved } : prev
+      );
     } catch (error) {
       console.error("[JobDetail] save toggle error:", error);
       toast.error("Unable to update saved jobs. Please try again.");
@@ -164,7 +205,14 @@ export default function JobDetailPage() {
     }
   };
 
-  const handleApply = async () => {
+  const handleResumeChange = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0] ?? null;
+    setResumeFile(file);
+  };
+
+  const handleConfirmApply = async () => {
     if (!job) return;
 
     if (role !== "candidate") {
@@ -172,30 +220,82 @@ export default function JobDetailPage() {
       return;
     }
 
-    try {
-      const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
-      if (!token) {
-        router.replace("/login");
-        return;
-      }
+    const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
 
+    if (!resumeFile) {
+      toast.error("Please upload your resume before applying.");
+      return;
+    }
+
+    try {
       setApplying(true);
 
-      // You can change this to your real applications API or a dedicated apply page.
-      // Example: POST /api/applications  { jobId }
-      await axios.post(
-        "/api/applications",
-        { jobId: job.id },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      // Assumes /api/applications accepts multipart/form-data with fields:
+      // - jobId
+      // - resume (file)
+      const formData = new FormData();
+      formData.append("jobId", job.id);
+      formData.append("resume", resumeFile);
+
+      await axios.post("/api/applications", formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data",
+        },
+      });
 
       toast.success("Application submitted.");
       setJob((prev) => (prev ? { ...prev, isApplied: true } : prev));
-    } catch (error) {
+      setIsApplyDialogOpen(false);
+      setResumeFile(null);
+    } catch (error: any) {
       console.error("[JobDetail] apply error:", error);
-      toast.error("Failed to submit application. Please try again.");
+
+      if (error?.response?.status === 409) {
+        toast.error("You have already applied for this job.");
+        setJob((prev) => (prev ? { ...prev, isApplied: true } : prev));
+      } else {
+        toast.error("Failed to submit application. Please try again.");
+      }
     } finally {
       setApplying(false);
+    }
+  };
+
+  const handleWithdraw = async () => {
+    if (!job) return;
+
+    if (role !== "candidate") {
+      toast.error("Only candidates can withdraw applications.");
+      return;
+    }
+
+    const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    try {
+      setWithdrawing(true);
+
+      // Assumes DELETE /api/applications with body { jobId } will withdraw
+      await axios.delete("/api/applications", {
+        headers: { Authorization: `Bearer ${token}` },
+        data: { jobId: job.id },
+      });
+
+      toast.success("Application withdrawn.");
+      setJob((prev) => (prev ? { ...prev, isApplied: false } : prev));
+    } catch (error: any) {
+      console.error("[JobDetail] withdraw error:", error);
+      toast.error("Failed to withdraw application. Please try again.");
+    } finally {
+      setWithdrawing(false);
     }
   };
 
@@ -285,7 +385,6 @@ export default function JobDetailPage() {
       <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)] lg:items-start">
         {/* LEFT: Job content */}
         <div className="flex flex-col gap-4">
-          {/* Overview card */}
           <Card className="border bg-background shadow-sm">
             <CardHeader className="space-y-3">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -343,7 +442,6 @@ export default function JobDetailPage() {
                   </div>
                 </div>
 
-                {/* (Optional) Logo */}
                 {job.companyLogoUrl && (
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg border bg-card text-xs font-semibold">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -449,7 +547,6 @@ export default function JobDetailPage() {
 
         {/* RIGHT: Apply + company info */}
         <div className="flex w-full flex-col gap-4">
-          {/* Apply card */}
           <Card className="border bg-background shadow-sm">
             <CardHeader className="space-y-1">
               <CardTitle className="text-sm font-semibold">
@@ -461,27 +558,104 @@ export default function JobDetailPage() {
             </CardHeader>
 
             <CardContent className="space-y-3">
-              <Button
-                type="button"
-                className="flex w-full items-center justify-center gap-2 rounded-full text-xs"
-                disabled={applying || job.isApplied || role !== "candidate"}
-                onClick={handleApply}
+              {/* Apply button + dialog */}
+              <Dialog
+                open={isApplyDialogOpen}
+                onOpenChange={(open) => {
+                  if (job.isApplied || !isCandidate) {
+                    // Do not allow opening dialog if already applied or not a candidate
+                    setIsApplyDialogOpen(false);
+                    return;
+                  }
+                  setIsApplyDialogOpen(open);
+                }}
               >
-                {job.isApplied ? (
-                  <>
-                    <CheckCircle2 className="h-4 w-4" />
-                    Already applied
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="h-4 w-4" />
-                    {applying ? "Submitting..." : "Apply now"}
-                    <ArrowRight className="h-4 w-4" />
-                  </>
-                )}
-              </Button>
+                <DialogTrigger asChild>
+                  <Button
+                    type="button"
+                    className="flex w-full items-center justify-center gap-2 rounded-full text-xs"
+                    disabled={applying || job.isApplied || !isCandidate}
+                  >
+                    {job.isApplied ? (
+                      <>
+                        <CheckCircle2 className="h-4 w-4" />
+                        Already applied
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4" />
+                        {applying ? "Submitting..." : "Apply now"}
+                        <ArrowRight className="h-4 w-4" />
+                      </>
+                    )}
+                  </Button>
+                </DialogTrigger>
 
-              {role !== "candidate" && (
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Apply to {job.title}</DialogTitle>
+                    <DialogDescription>
+                      Upload your resume to submit your application for this
+                      role at {job.company}.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="space-y-3 py-2">
+                    <p className="text-xs text-muted-foreground">
+                      Accepted formats: PDF, DOC, DOCX.
+                    </p>
+                    <Input
+                      type="file"
+                      accept=".pdf,.doc,.docx"
+                      onChange={handleResumeChange}
+                    />
+                    {resumeFile && (
+                      <p className="text-xs text-muted-foreground">
+                        Selected:{" "}
+                        <span className="font-medium">
+                          {resumeFile.name}
+                        </span>
+                      </p>
+                    )}
+                  </div>
+
+                  <DialogFooter className="flex justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setIsApplyDialogOpen(false);
+                        setResumeFile(null);
+                      }}
+                      disabled={applying}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={handleConfirmApply}
+                      disabled={applying || !resumeFile}
+                    >
+                      {applying ? "Submitting..." : "Submit application"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              {/* Withdraw button visible only for candidates who have applied */}
+              {isCandidate && job.isApplied && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex w-full items-center justify-center gap-2 rounded-full text-xs"
+                  onClick={handleWithdraw}
+                  disabled={withdrawing}
+                >
+                  {withdrawing ? "Withdrawing..." : "Withdraw application"}
+                </Button>
+              )}
+
+              {!isCandidate && (
                 <p className="text-[11px] text-muted-foreground">
                   You&apos;re currently signed in as an employer. Switch to a
                   candidate account to apply.
@@ -503,7 +677,6 @@ export default function JobDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Company snapshot */}
           <Card className="border bg-background shadow-sm">
             <CardHeader className="space-y-1">
               <div className="flex items-center gap-2">
@@ -536,16 +709,17 @@ export default function JobDetailPage() {
                   </span>
                 )}
                 {job.companyWebsite && (
-                  <button
+                  <Button
                     type="button"
-                    className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline"
+                    variant="ghost"
+                    className="inline-flex items-center gap-1 px-0 text-primary underline-offset-2 hover:underline"
                     onClick={() =>
                       window.open(job.companyWebsite as string, "_blank")
                     }
                   >
                     <Globe2 className="h-3 w-3" />
                     Website
-                  </button>
+                  </Button>
                 )}
               </div>
 

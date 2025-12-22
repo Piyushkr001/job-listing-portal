@@ -24,11 +24,12 @@ export type AuthProvider = (typeof authProviderEnum.enumValues)[number];
 export const jobStatusEnum = pgEnum("job_status", ["draft", "open", "closed"]);
 export const applicationStatusEnum = pgEnum("application_status", [
   "applied",
-  "screening",
-  "interview",
-  "offer",
-  "rejected",
+  "shortlisted",
+  "interview_scheduled",
+  "offered",
   "hired",
+  "rejected",
+  "withdrawn",
 ]);
 
 /* ========= Users ========= */
@@ -56,13 +57,11 @@ export const users = pgTable(
   },
   (t) => ({
     // helpful query indexes
-    // helpful query indexes
     usersRoleIdx: index("users_role_idx").on(t.role),
     usersCreatedIdx: index("users_created_at_idx").on(t.createdAt),
     // avoid duplicate Google links
-    // avoid duplicate Google links
     usersGoogleIdUq: uniqueIndex("users_google_id_uq").on(t.googleId),
-  })
+  }),
 );
 
 /* ========= Jobs (posted by employers) ========= */
@@ -99,7 +98,7 @@ export const jobs = pgTable(
     jobsStatusIdx: index("jobs_status_idx").on(t.status),
     jobsPublishedIdx: index("jobs_published_at_idx").on(t.publishedAt),
     jobsSlugUq: uniqueIndex("jobs_slug_uq").on(t.slug),
-  })
+  }),
 );
 
 /* ========= Applications (candidates → jobs) ========= */
@@ -118,22 +117,36 @@ export const applications = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
 
     status: applicationStatusEnum("status").notNull().default("applied"),
+
     step: varchar("step", { length: 255 }).notNull().default("Application received"),
 
     resumeUrl: text("resume_url"),
     coverLetter: text("cover_letter"),
 
-    nextInterviewAt: timestamp("next_interview_at", { withTimezone: true }),
+    nextInterviewAt: timestamp("next_interview_at", {
+      withTimezone: true,
+    }),
 
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", {
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+
+    updatedAt: timestamp("updated_at", {
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
   },
   (t) => ({
     appsJobIdx: index("applications_job_id_idx").on(t.jobId),
     appsCandidateIdx: index("applications_candidate_id_idx").on(t.candidateId),
     appsStatusIdx: index("applications_status_idx").on(t.status),
-    appsNextInterviewIdx: index("applications_next_interview_at_idx").on(t.nextInterviewAt),
-  })
+    appsNextInterviewIdx: index("applications_next_interview_at_idx").on(
+      t.nextInterviewAt,
+    ),
+  }),
 );
 
 /* ========= Saved Jobs (candidate bookmarks) ========= */
@@ -142,6 +155,7 @@ export const savedJobs = pgTable(
   "saved_jobs",
   {
     id: uuid("id").defaultRandom().primaryKey(),
+
     candidateId: uuid("candidate_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -150,15 +164,23 @@ export const savedJobs = pgTable(
       .notNull()
       .references(() => jobs.id, { onDelete: "cascade" }),
 
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (table) => ({
     // Prevent duplicates: same candidate saving the same job multiple times
     candidateJobUnique: uniqueIndex("saved_jobs_candidate_job_unique").on(
       table.candidateId,
-      table.jobId
+      table.jobId,
     ),
-  })
+
+    // Helpful for queries like:
+    // - all saved jobs for a candidate
+    // - check if a job is saved by this candidate
+    savedJobsCandidateIdx: index("saved_jobs_candidate_id_idx").on(table.candidateId),
+    savedJobsJobIdx: index("saved_jobs_job_id_idx").on(table.jobId),
+  }),
 );
 
 /* ========= Candidate Profile ========= */
@@ -180,6 +202,8 @@ export const userProfiles = pgTable(
     headline: varchar("headline", { length: 255 }),
     bio: text("bio"),
 
+    resumeUrl: text("resume_url"),
+
     // Candidate extras
     experienceYears: integer("experience_years"),
     preferredTitle: varchar("preferred_title", { length: 255 }),
@@ -191,7 +215,7 @@ export const userProfiles = pgTable(
   },
   (t) => ({
     userProfilesLocationIdx: index("user_profiles_location_idx").on(t.location),
-  })
+  }),
 );
 
 export const userSkills = pgTable(
@@ -205,7 +229,7 @@ export const userSkills = pgTable(
   },
   (t) => ({
     pk: primaryKey({ columns: [t.userId, t.skill] }), // avoid duplicates
-  })
+  }),
 );
 
 /* ========= Employer Profile ========= */
@@ -228,6 +252,37 @@ export const employerProfiles = pgTable("employer_profiles", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+
+export const applicationEvents = pgTable("application_events", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  applicationId: uuid("application_id")
+    .notNull()
+    .references(() => applications.id, { onDelete: "cascade" }),
+
+  actorId: uuid("actor_id").references(() => users.id, { onDelete: "set null" }),
+
+  // e.g. "status_changed", "note", "interview_scheduled"
+  type: varchar("type", { length: 50 }).notNull(),
+
+  // optional old/new status
+  fromStatus: varchar("from_status", { length: 50 }),
+  toStatus: varchar("to_status", { length: 50 }),
+
+  message: text("message"), // optional note
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const applicationEventsRelations = relations(applicationEvents, ({ one }) => ({
+  application: one(applications, {
+    fields: [applicationEvents.applicationId],
+    references: [applications.id],
+  }),
+  actor: one(users, {
+    fields: [applicationEvents.actorId],
+    references: [users.id],
+  }),
+}));
+
 /* ========= Relations ========= */
 
 export const usersRelations = relations(users, ({ one, many }) => ({
@@ -235,7 +290,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   applications: many(applications),
   savedJobs: many(savedJobs),
 
-  // NEW: wire in profile relationships
+  // profile relationships
   profile: one(userProfiles, {
     fields: [users.id],
     references: [userProfiles.userId],
@@ -278,12 +333,12 @@ export const savedJobsRelations = relations(savedJobs, ({ one }) => ({
   }),
 }));
 
-export const userProfilesRelations = relations(userProfiles, ({ one, many }) => ({
+// ✅ FIXED: remove invalid `skills` relation here
+export const userProfilesRelations = relations(userProfiles, ({ one }) => ({
   user: one(users, {
     fields: [userProfiles.userId],
     references: [users.id],
   }),
-  skills: many(userSkills),
 }));
 
 export const userSkillsRelations = relations(userSkills, ({ one }) => ({
@@ -300,6 +355,7 @@ export const employerProfilesRelations = relations(employerProfiles, ({ one }) =
   }),
 }));
 
+/* ========= Password reset tokens ========= */
 
 export const passwordResetTokens = pgTable("password_reset_tokens", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -319,6 +375,7 @@ export const passwordResetTokens = pgTable("password_reset_tokens", {
     .defaultNow(),
 });
 
+/* ========= User settings ========= */
 
 export const userSettings = pgTable("user_settings", {
   // One settings row per user

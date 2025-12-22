@@ -27,7 +27,6 @@ const ROLE_KEY = "hireorbit_role";
 
 /* ---------- API RESPONSE TYPES ---------- */
 
-// What your /api/dashboard/candidate should return
 type CandidateDashboardResponse = {
   stats: {
     activeApplications: number;
@@ -36,11 +35,12 @@ type CandidateDashboardResponse = {
   };
   recentApplications: {
     id: string;
+    jobId: string;
     company: string;
     title: string;
     status: string;
     step: string;
-    updatedAt: string;
+    updatedAt: string; // ISO string
   }[];
   recommendedJobs: {
     id: string;
@@ -63,7 +63,7 @@ type EmployerDashboardResponse = {
     location: string;
     status: "Open" | "Draft" | string;
     applicants: number;
-    updatedAt: string;
+    updatedAt: string; // ISO string
   }[];
   pipeline: {
     label: string;
@@ -144,13 +144,6 @@ export default function DashboardPage() {
 
     fetchDashboard();
 
-    // Optional: polling for "real-time" updates
-    // const interval = setInterval(fetchDashboard, 30_000);
-    // return () => {
-    //   cancelled = true;
-    //   clearInterval(interval);
-    // };
-
     return () => {
       cancelled = true;
     };
@@ -201,7 +194,6 @@ export default function DashboardPage() {
     ? (data as EmployerDashboardResponse)
     : null;
 
-  // Check if the returned data actually has content
   const hasCandidateContent =
     !!candidateData &&
     (candidateData.stats.activeApplications > 0 ||
@@ -250,13 +242,13 @@ export default function DashboardPage() {
 /* ---------- EMPTY STATE (full page) ---------- */
 
 function DashboardEmptyState({ role }: { role: Role }) {
+  const router = useRouter();
+
   return (
     <div className="flex flex-1 flex-col items-center justify-center rounded-xl border bg-background/60 px-6 py-10 text-center">
       <Inbox className="mb-3 h-8 w-8 text-muted-foreground" />
       <h2 className="text-base font-semibold">
-        {role === "candidate"
-          ? "No activity yet"
-          : "No hiring activity yet"}
+        {role === "candidate" ? "No activity yet" : "No hiring activity yet"}
       </h2>
       <p className="mt-1 max-w-md text-sm text-muted-foreground">
         {role === "candidate"
@@ -264,11 +256,19 @@ function DashboardEmptyState({ role }: { role: Role }) {
           : "Once you create job posts and start receiving candidates, your hiring activity will show up here."}
       </p>
       {role === "candidate" ? (
-        <Button className="mt-4 rounded-full" size="sm">
+        <Button
+          className="mt-4 rounded-full"
+          size="sm"
+          onClick={() => router.push("/jobs")}
+        >
           Browse jobs
         </Button>
       ) : (
-        <Button className="mt-4 rounded-full" size="sm">
+        <Button
+          className="mt-4 rounded-full"
+          size="sm"
+          onClick={() => router.push("/dashboard/jobs/new")}
+        >
           Post your first job
         </Button>
       )}
@@ -279,6 +279,8 @@ function DashboardEmptyState({ role }: { role: Role }) {
 /* ---------- HEADER ---------- */
 
 function DashboardHeader({ role }: { role: Role }) {
+  const router = useRouter();
+
   return (
     <header className="flex flex-col justify-between gap-3 rounded-xl border bg-background px-4 py-3 shadow-sm md:flex-row md:items-center md:px-6">
       <div>
@@ -296,19 +298,37 @@ function DashboardHeader({ role }: { role: Role }) {
       <div className="flex flex-wrap gap-2">
         {role === "candidate" ? (
           <>
-            <Button size="sm" variant="outline" className="rounded-full">
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-full"
+              onClick={() => router.push("/dashboard/profile")}
+            >
               View profile
             </Button>
-            <Button size="sm" className="rounded-full">
+            <Button
+              size="sm"
+              className="rounded-full"
+              onClick={() => router.push("/jobs")}
+            >
               Browse jobs
             </Button>
           </>
         ) : (
           <>
-            <Button size="sm" variant="outline" className="rounded-full">
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-full"
+              onClick={() => router.push("/dashboard/jobs")}
+            >
               View all jobs
             </Button>
-            <Button size="sm" className="rounded-full">
+            <Button
+              size="sm"
+              className="rounded-full"
+              onClick={() => router.push("/dashboard/jobs/new")}
+            >
               Post a job
             </Button>
           </>
@@ -427,8 +447,7 @@ function DashboardMainContent({
       {role === "candidate" ? (
         <>
           <CandidateApplicationsPanel
-            applications={(data as CandidateDashboardResponse)
-              .recentApplications}
+            applications={(data as CandidateDashboardResponse).recentApplications}
           />
           <CandidateRecommendedJobsPanel
             jobs={(data as CandidateDashboardResponse).recommendedJobs}
@@ -436,12 +455,8 @@ function DashboardMainContent({
         </>
       ) : (
         <>
-          <EmployerJobsPanel
-            jobs={(data as EmployerDashboardResponse).recentJobs}
-          />
-          <EmployerPipelinePanel
-            stages={(data as EmployerDashboardResponse).pipeline}
-          />
+          <EmployerJobsPanel jobs={(data as EmployerDashboardResponse).recentJobs} />
+          <EmployerPipelinePanel stages={(data as EmployerDashboardResponse).pipeline} />
         </>
       )}
     </section>
@@ -455,12 +470,18 @@ function CandidateApplicationsPanel({
 }: {
   applications: CandidateDashboardResponse["recentApplications"];
 }) {
+  const router = useRouter();
+
+  const formatDate = (iso: string) =>
+    new Date(iso).toLocaleDateString(undefined, {
+      month: "short",
+      day: "2-digit",
+    });
+
   return (
     <Card className="flex h-full flex-col border bg-background shadow-sm">
       <CardHeader>
-        <CardTitle className="text-sm font-semibold">
-          Recent applications
-        </CardTitle>
+        <CardTitle className="text-sm font-semibold">Recent applications</CardTitle>
         <p className="text-xs text-muted-foreground">
           Stay on top of where you are in each company’s hiring process.
         </p>
@@ -486,16 +507,18 @@ function CandidateApplicationsPanel({
             </div>
             <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
               <span>{item.company}</span>
-              <span>{item.updatedAt}</span>
+              <span>Updated {formatDate(item.updatedAt)}</span>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">{item.step}</p>
           </div>
         ))}
 
+        {/* ✅ IMPLEMENTED */}
         <Button
           variant="outline"
           size="sm"
           className="mt-1 w-full rounded-full text-xs"
+          onClick={() => router.push("/dashboard/applications")}
         >
           View all applications
         </Button>
@@ -509,22 +532,19 @@ function CandidateRecommendedJobsPanel({
 }: {
   jobs: CandidateDashboardResponse["recommendedJobs"];
 }) {
+  const router = useRouter();
+
   return (
     <Card className="flex h-full flex-col border bg-background shadow-sm">
       <CardHeader>
-        <CardTitle className="text-sm font-semibold">
-          Recommended for you
-        </CardTitle>
-        <p className="text-xs text-muted-foreground">
-          Based on your skills and recent activity.
-        </p>
+        <CardTitle className="text-sm font-semibold">Recommended for you</CardTitle>
+        <p className="text-xs text-muted-foreground">Based on your skills and recent activity.</p>
       </CardHeader>
 
       <CardContent className="space-y-3">
         {jobs.length === 0 && (
           <p className="text-xs text-muted-foreground">
-            We don&apos;t have any recommendations yet. Start applying or
-            updating your profile.
+            We don&apos;t have any recommendations yet. Start applying or updating your profile.
           </p>
         )}
 
@@ -538,9 +558,13 @@ function CandidateRecommendedJobsPanel({
               <Clock3 className="h-3.5 w-3.5 text-muted-foreground" />
             </div>
             <p className="text-xs text-muted-foreground">{job.company}</p>
-            <p className="text-xs text-muted-foreground">{job.type}</p>
+            <p className="text-xs text-muted-foreground capitalize">{job.type}</p>
             <div className="mt-2 flex gap-2">
-              <Button size="sm" className="rounded-full px-3 py-1 text-[11px]">
+              <Button
+                size="sm"
+                className="rounded-full px-3 py-1 text-[11px]"
+                onClick={() => router.push(`/jobs/${job.id}`)}
+              >
                 Apply
               </Button>
               <Button
@@ -560,6 +584,7 @@ function CandidateRecommendedJobsPanel({
           variant="ghost"
           size="sm"
           className="w-full rounded-full text-xs"
+          onClick={() => router.push("/jobs")}
         >
           Browse all jobs
         </Button>
@@ -575,12 +600,16 @@ function EmployerJobsPanel({
 }: {
   jobs: EmployerDashboardResponse["recentJobs"];
 }) {
+  const formatDate = (iso: string) =>
+    new Date(iso).toLocaleDateString(undefined, {
+      month: "short",
+      day: "2-digit",
+    });
+
   return (
     <Card className="flex h-full flex-col border bg-background shadow-sm">
       <CardHeader>
-        <CardTitle className="text-sm font-semibold">
-          Recent job posts
-        </CardTitle>
+        <CardTitle className="text-sm font-semibold">Recent job posts</CardTitle>
         <p className="text-xs text-muted-foreground">
           Track performance of your latest openings.
         </p>
@@ -613,16 +642,12 @@ function EmployerJobsPanel({
             <p className="text-xs text-muted-foreground">{job.location}</p>
             <div className="mt-1 flex items-center justify-between gap-2 text-xs text-muted-foreground">
               <span>{job.applicants} applicants</span>
-              <span>Updated {job.updatedAt}</span>
+              <span>Updated {formatDate(job.updatedAt)}</span>
             </div>
           </div>
         ))}
 
-        <Button
-          variant="outline"
-          size="sm"
-          className="mt-1 w-full rounded-full text-xs"
-        >
+        <Button variant="outline" size="sm" className="mt-1 w-full rounded-full text-xs">
           View all job posts
         </Button>
       </CardContent>
@@ -638,9 +663,7 @@ function EmployerPipelinePanel({
   return (
     <Card className="flex h-full flex-col border bg-background shadow-sm">
       <CardHeader>
-        <CardTitle className="text-sm font-semibold">
-          Pipeline snapshot
-        </CardTitle>
+        <CardTitle className="text-sm font-semibold">Pipeline snapshot</CardTitle>
         <p className="text-xs text-muted-foreground">
           Quick view of where candidates currently are across roles.
         </p>
@@ -654,7 +677,9 @@ function EmployerPipelinePanel({
         )}
 
         {stages.map((stage, idx) => {
-          const Icon = [FileText, Users, CalendarClock, CheckCircle2][idx] || FileText;
+          const Icon =
+            [FileText, Users, CalendarClock, CheckCircle2][idx] || FileText;
+
           return (
             <div
               key={stage.label}
@@ -671,11 +696,7 @@ function EmployerPipelinePanel({
                   </p>
                 </div>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="rounded-full text-xs"
-              >
+              <Button variant="ghost" size="sm" className="rounded-full text-xs">
                 View
               </Button>
             </div>
@@ -684,11 +705,7 @@ function EmployerPipelinePanel({
 
         <Separator className="my-2" />
 
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full rounded-full text-xs"
-        >
+        <Button variant="ghost" size="sm" className="w-full rounded-full text-xs">
           Open candidate pipeline
         </Button>
       </CardContent>

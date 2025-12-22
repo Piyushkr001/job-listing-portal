@@ -110,7 +110,7 @@ export default function EmployerJobsPage() {
 
   const handlePostJob = () => {
     // Change this route if your "post job" page is different
-    router.push("/dashboard/post-job");
+    router.push("/dashboard/jobs-new");
   };
 
   const filteredJobs = jobs.filter((job) => {

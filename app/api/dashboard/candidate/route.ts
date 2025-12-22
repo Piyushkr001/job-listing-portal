@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/config/db";
 import { applications, jobs, savedJobs, users } from "@/config/schema";
-import { and, desc, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { verifyJwt } from "@/lib/auth";
 
 export async function GET(req: Request) {
@@ -25,36 +25,16 @@ export async function GET(req: Request) {
       return NextResponse.json({ message: "Forbidden" }, { status: 403 });
     }
 
-    const userId = payload.sub;
-    const now = new Date();
+    const userId = payload.sub as string;
 
-    // 2) Stats: activeApplications, upcomingInterviews, savedJobs
-    const activeStatuses = ["applied", "screening", "interview", "offer"] as const;
-
-    const [activeRows, upcomingRows, savedRows] = await Promise.all([
+    // 2) Stats: activeApplications (all apps), upcomingInterviews (placeholder), savedJobs
+    const [activeRows, savedRows] = await Promise.all([
       db
         .select({
           count: sql<number>`cast(count(*) as int)`,
         })
         .from(applications)
-        .where(
-          and(
-            eq(applications.candidateId, userId),
-            inArray(applications.status, activeStatuses as any)
-          )
-        ),
-
-      db
-        .select({
-          count: sql<number>`cast(count(*) as int)`,
-        })
-        .from(applications)
-        .where(
-          and(
-            eq(applications.candidateId, userId),
-            gt(applications.nextInterviewAt, now)
-          )
-        ),
+        .where(eq(applications.candidateId, userId)),
 
       db
         .select({
@@ -66,8 +46,11 @@ export async function GET(req: Request) {
 
     const activeApplications =
       activeRows[0]?.count !== undefined ? activeRows[0].count : 0;
-    const upcomingInterviews =
-      upcomingRows[0]?.count !== undefined ? upcomingRows[0].count : 0;
+
+    // If you want real upcoming interviews later, add a `nextInterviewAt`
+    // field in `applications` and a similar count query.
+    const upcomingInterviews = 0;
+
     const savedJobsCount =
       savedRows[0]?.count !== undefined ? savedRows[0].count : 0;
 
@@ -100,7 +83,7 @@ export async function GET(req: Request) {
           : new Date(row.updatedAt as any).toISOString(),
     }));
 
-    // 4) Recommended jobs (simple: latest open roles)
+    // 4) Recommended jobs (simple: latest roles using only safe columns)
     const recommendedJobsRaw = await db
       .select({
         id: jobs.id,
@@ -110,8 +93,8 @@ export async function GET(req: Request) {
       })
       .from(jobs)
       .innerJoin(users, eq(jobs.employerId, users.id))
-      .where(eq(jobs.status, "open"))
-      .orderBy(desc(jobs.publishedAt))
+      // Avoid relying on jobs.status / jobs.publishedAt here
+      .orderBy(desc(jobs.createdAt))
       .limit(5);
 
     const recommendedJobs = recommendedJobsRaw.map((job) => ({

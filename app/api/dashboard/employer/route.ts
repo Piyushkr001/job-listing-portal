@@ -2,8 +2,10 @@
 import { NextResponse } from "next/server";
 import { db } from "@/config/db";
 import { applications, jobs } from "@/config/schema";
-import { and, desc, eq, gt, lt, sql, inArray } from "drizzle-orm";
+import { and, desc, eq, gt, lt, sql } from "drizzle-orm";
 import { verifyJwt } from "@/lib/auth";
+
+export const runtime = "nodejs";
 
 export async function GET(req: Request) {
   try {
@@ -24,11 +26,9 @@ export async function GET(req: Request) {
       return NextResponse.json({ message: "Forbidden" }, { status: 403 });
     }
 
-    const userId = payload.sub;
+    const userId = payload.sub as string;
     const now = new Date();
     const weekAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-
-    const activeStatuses = ["applied", "screening", "interview", "offer"] as const;
 
     // 2) Stats: openRoles, activeCandidates, interviewsThisWeek
     const [openRolesRows, activeCandidatesRows, interviewsThisWeekRows] =
@@ -41,19 +41,15 @@ export async function GET(req: Request) {
           .from(jobs)
           .where(and(eq(jobs.employerId, userId), eq(jobs.status, "open"))),
 
-        // activeCandidates = distinct candidates in non-terminal statuses
+        // activeCandidates = distinct candidates across all statuses
+        // (we don't filter by specific application_status values to avoid enum issues)
         db
           .select({
             count: sql<number>`cast(count(distinct ${applications.candidateId}) as int)`,
           })
           .from(applications)
           .innerJoin(jobs, eq(applications.jobId, jobs.id))
-          .where(
-            and(
-              eq(jobs.employerId, userId),
-              inArray(applications.status, activeStatuses as any)
-            )
-          ),
+          .where(eq(jobs.employerId, userId)),
 
         // interviewsThisWeek = applications with nextInterviewAt in next 7 days
         db
@@ -120,8 +116,8 @@ export async function GET(req: Request) {
 
     const recentJobs = recentJobsBase.map((job) => ({
       id: job.id,
-      title: job.title,
-      location: job.location,
+      title: job.title ?? "Untitled role",
+      location: job.location ?? "Not specified",
       status: mapJobStatus(job.status as string),
       applicants: applicantsByJobId[job.id] ?? 0,
       updatedAt:
@@ -131,15 +127,8 @@ export async function GET(req: Request) {
     }));
 
     // 4) Pipeline: counts per application status for this employer
-    const pipelineStatuses = [
-      "applied",
-      "screening",
-      "interview",
-      "offer",
-      "rejected",
-      "hired",
-    ] as const;
-
+    //    IMPORTANT: We *do not* inject literal status strings into SQL.
+    //    We just GROUP BY whatever enum values actually exist in the DB.
     const statusLabels: Record<string, string> = {
       applied: "Applied",
       screening: "Screening",
@@ -149,27 +138,23 @@ export async function GET(req: Request) {
       hired: "Hired",
     };
 
-    const pipelineData = await Promise.all(
-      pipelineStatuses.map(async (status) => {
-        const [row] = await db
-          .select({
-            count: sql<number>`cast(count(*) as int)`,
-          })
-          .from(applications)
-          .innerJoin(jobs, eq(applications.jobId, jobs.id))
-          .where(and(eq(jobs.employerId, userId), eq(applications.status, status)));
-
-        return {
-          status,
-          count: row?.count ?? 0,
-        };
+    const pipelineRows = await db
+      .select({
+        status: applications.status,
+        count: sql<number>`cast(count(*) as int)`,
       })
-    );
+      .from(applications)
+      .innerJoin(jobs, eq(applications.jobId, jobs.id))
+      .where(eq(jobs.employerId, userId))
+      .groupBy(applications.status);
 
-    const pipeline = pipelineData.map(({ status, count }) => ({
-      label: statusLabels[status] ?? status,
-      count,
-    }));
+    const pipeline = pipelineRows.map((row) => {
+      const rawStatus = row.status as string;
+      return {
+        label: statusLabels[rawStatus] ?? rawStatus,
+        count: row.count,
+      };
+    });
 
     // 5) Response shape matches EmployerDashboardResponse
     return NextResponse.json(

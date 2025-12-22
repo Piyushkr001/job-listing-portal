@@ -39,7 +39,7 @@ export default function RootLayout({
           {children}
           <Footer />
           <Toaster
-            position="top-right"
+            position="top-center"
             toastOptions={{ style: { zIndex: 60 } }}
             gutter={8}
           />

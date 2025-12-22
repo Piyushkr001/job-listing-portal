@@ -33,7 +33,7 @@ export async function GET(req: Request) {
 
     const candidateId = payload.sub as string;
 
-    // 🔹 Only use columns that actually exist in your jobs table:
+    // Only use columns that actually exist in your jobs table:
     // id, title, location, employerId
     const rows = await db
       .select({
@@ -46,6 +46,7 @@ export async function GET(req: Request) {
         employerCompanyName: users.companyName,
 
         applicationId: applications.id,
+        applicationStatus: applications.status, // <-- NEW: read status
       })
       .from(savedJobs)
       .innerJoin(jobs, eq(savedJobs.jobId, jobs.id))
@@ -61,10 +62,14 @@ export async function GET(req: Request) {
       .orderBy(desc(savedJobs.createdAt));
 
     const jobsList = rows.map((row) => {
-      // 🔹 Fallbacks, since we’re NOT reading these from DB
+      // Fallbacks, since we’re NOT reading these from DB
       const workMode: WorkMode = "onsite";
       const jobType: JobType = "full-time";
       const salaryRange: string | null = null;
+
+      // applied = true only if there is a non-withdrawn application
+      const applied =
+        !!row.applicationId && row.applicationStatus !== "withdrawn";
 
       return {
         id: row.savedId,
@@ -75,7 +80,7 @@ export async function GET(req: Request) {
         workMode,
         jobType,
         status: "open" as const, // Treat all as open for now
-        applied: !!row.applicationId,
+        applied,
         savedAt:
           row.savedAt instanceof Date
             ? row.savedAt.toISOString()
@@ -172,62 +177,6 @@ export async function POST(req: Request) {
     console.error("[/api/saved-jobs] POST error:", error);
     return NextResponse.json(
       { message: "Failed to save job" },
-      { status: 500 }
-    );
-  }
-}
-
-/* ---------- DELETE: unsave a job ---------- */
-
-export async function DELETE(req: Request) {
-  try {
-    const authHeader = req.headers.get("authorization") ?? "";
-    if (!authHeader.startsWith("Bearer ")) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-    }
-
-    const token = authHeader.slice(7);
-    const payload = verifyJwt(token);
-
-    if (!payload || !payload.sub) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-    }
-
-    if (payload.role !== "candidate") {
-      return NextResponse.json({ message: "Forbidden" }, { status: 403 });
-    }
-
-    const candidateId = payload.sub as string;
-
-    const body = (await req.json().catch(() => null)) as
-      | { jobId?: string }
-      | null;
-
-    const jobId = body?.jobId;
-    if (!jobId) {
-      return NextResponse.json(
-        { message: "jobId is required" },
-        { status: 400 }
-      );
-    }
-
-    await db
-      .delete(savedJobs)
-      .where(
-        and(
-          eq(savedJobs.candidateId, candidateId),
-          eq(savedJobs.jobId, jobId)
-        )
-      );
-
-    return NextResponse.json(
-      { message: "Job removed from saved list" },
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error("[/api/saved-jobs] DELETE error:", error);
-    return NextResponse.json(
-      { message: "Failed to remove job" },
       { status: 500 }
     );
   }

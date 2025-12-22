@@ -1,5 +1,4 @@
 // app/dashboard/saved-jobs/page.tsx
-
 "use client";
 
 import * as React from "react";
@@ -19,12 +18,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent,
-} from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 
 type Role = "candidate" | "employer";
@@ -38,8 +32,8 @@ type WorkMode = "onsite" | "remote" | "hybrid";
 type JobType = "full-time" | "part-time" | "internship" | "contract";
 
 type SavedJob = {
-  id: string;
-  jobId: string;
+  id: string; // saved row id
+  jobId: string; // job id
   jobTitle: string;
   company: string;
   location: string;
@@ -66,33 +60,49 @@ export default function SavedJobsPage() {
   const router = useRouter();
 
   const [role, setRole] = React.useState<Role | null>(null);
+  const [token, setToken] = React.useState<string>(""); // ✅ keep token in state
   const [loading, setLoading] = React.useState(true);
   const [loadingList, setLoadingList] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState<"all" | "open" | "applied">(
     "all"
   );
   const [search, setSearch] = React.useState("");
-
   const [data, setData] = React.useState<SavedJobsResponse | null>(null);
+
+  const reload = React.useCallback(async () => {
+    if (!token) return;
+    setLoadingList(true);
+    try {
+      const { data } = await axios.get<SavedJobsResponse>("/api/saved-jobs", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setData(data);
+    } catch (error) {
+      console.error("[Saved Jobs] reload error:", error);
+    } finally {
+      setLoadingList(false);
+    }
+  }, [token]);
 
   // Load saved jobs
   React.useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
-    if (!token) {
+    const t = window.localStorage.getItem(AUTH_TOKEN_KEY);
+    if (!t) {
       router.replace("/login");
       return;
     }
 
     const storedRole = window.localStorage.getItem(ROLE_KEY) as Role | null;
     if (!storedRole || storedRole !== "candidate") {
-      // Only candidates should see this page
       router.replace("/dashboard");
       return;
     }
 
     setRole(storedRole);
+    setToken(t);
+
     let cancelled = false;
 
     const load = async () => {
@@ -101,7 +111,7 @@ export default function SavedJobsPage() {
         setLoadingList(true);
 
         const { data } = await axios.get<SavedJobsResponse>("/api/saved-jobs", {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { Authorization: `Bearer ${t}` },
         });
 
         if (!cancelled) setData(data);
@@ -168,9 +178,18 @@ export default function SavedJobsPage() {
                   variant="outline"
                   size="sm"
                   className="inline-flex items-center gap-1 rounded-full"
+                  onClick={reload}
+                  disabled={loadingList || !token}
+                  title="Refresh"
                 >
-                  <Filter className="h-4 w-4" />
-                  <span className="hidden sm:inline">Filter</span>
+                  {loadingList ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Filter className="h-4 w-4" />
+                  )}
+                  <span className="hidden sm:inline">
+                    {loadingList ? "Loading..." : "Refresh"}
+                  </span>
                 </Button>
               </div>
             </CardHeader>
@@ -198,6 +217,9 @@ export default function SavedJobsPage() {
                       data={data}
                       filter={activeTab}
                       search={search}
+                      token={token}
+                      onUpdate={setData}
+                      onReload={reload}
                     />
                   )}
                 </TabsContent>
@@ -311,10 +333,16 @@ function SavedJobsList({
   data,
   filter,
   search,
+  token,
+  onUpdate,
+  onReload,
 }: {
   data: SavedJobsResponse | null;
   filter: "all" | "open" | "applied";
   search: string;
+  token: string;
+  onUpdate: React.Dispatch<React.SetStateAction<SavedJobsResponse | null>>;
+  onReload: () => Promise<void>;
 }) {
   if (!data || data.jobs.length === 0) {
     return (
@@ -350,13 +378,33 @@ function SavedJobsList({
   return (
     <div className="flex flex-col gap-3">
       {filtered.map((job) => (
-        <SavedJobCard key={job.id} job={job} />
+        <SavedJobCard
+          key={job.id}
+          job={job}
+          token={token}
+          onUpdate={onUpdate}
+          onReload={onReload}
+        />
       ))}
     </div>
   );
 }
 
-function SavedJobCard({ job }: { job: SavedJob }) {
+function SavedJobCard({
+  job,
+  token,
+  onUpdate,
+  onReload,
+}: {
+  job: SavedJob;
+  token: string;
+  onUpdate: React.Dispatch<React.SetStateAction<SavedJobsResponse | null>>;
+  onReload: () => Promise<void>;
+}) {
+  const router = useRouter();
+  const [removing, setRemoving] = React.useState(false);
+  const [navigating, setNavigating] = React.useState(false);
+
   const savedDate = new Date(job.savedAt);
 
   const workModeLabel =
@@ -383,18 +431,76 @@ function SavedJobCard({ job }: { job: SavedJob }) {
 
   const isOpen = job.status === "open";
 
+  const goToJob = () => {
+    if (navigating) return;
+    setNavigating(true);
+    router.push(`/jobs/${job.jobId}`);
+    setTimeout(() => setNavigating(false), 500);
+  };
+
+  const goToApplications = () => {
+    if (navigating) return;
+    setNavigating(true);
+    router.push("/dashboard/applications");
+    setTimeout(() => setNavigating(false), 500);
+  };
+
+  const removeSaved = async () => {
+    if (removing || !token) return;
+
+    setRemoving(true);
+
+    // optimistic UI (same as yours)
+    onUpdate((prev) => {
+      if (!prev) return prev;
+      const nextJobs = prev.jobs.filter((j) => j.id !== job.id);
+      const nextStats = {
+        total: Math.max(0, prev.stats.total - 1),
+        open: Math.max(0, prev.stats.open - (job.status === "open" ? 1 : 0)),
+        applied: Math.max(0, prev.stats.applied - (job.applied ? 1 : 0)),
+      };
+      return { ...prev, jobs: nextJobs, stats: nextStats };
+    });
+
+    try {
+      // ✅ This must match backend: DELETE /api/saved-jobs/[id] where id = saved_jobs.id
+      await axios.delete(`/api/saved-jobs/${job.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch (error) {
+      console.error("[SavedJob] remove error:", error);
+      // rollback: safest refetch
+      await onReload();
+    } finally {
+      setRemoving(false);
+    }
+  };
+
+  const primaryDisabled = navigating || removing || (!isOpen && !job.applied);
+  const removeDisabled = removing || navigating || !token;
+
   return (
     <div className="flex flex-col gap-2 rounded-lg border bg-card px-3 py-3 text-xs sm:px-4 sm:py-3">
       <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
         <div className="flex flex-col gap-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-semibold">{job.jobTitle}</span>
+            <button
+              type="button"
+              onClick={goToJob}
+              className="text-left text-sm font-semibold underline-offset-4 hover:underline"
+              title="Open job"
+              disabled={navigating}
+            >
+              {job.jobTitle}
+            </button>
+
             <Badge
               variant={isOpen ? "default" : "secondary"}
               className="rounded-full px-2 py-0.5 text-[10px]"
             >
               {isOpen ? "Open" : "Closed"}
             </Badge>
+
             {job.applied && (
               <Badge
                 variant="outline"
@@ -462,16 +568,29 @@ function SavedJobCard({ job }: { job: SavedJob }) {
             type="button"
             size="sm"
             className="rounded-full"
+            onClick={job.applied ? goToApplications : goToJob}
+            disabled={primaryDisabled}
+            title={!isOpen && !job.applied ? "This job is closed" : undefined}
           >
-            {job.applied ? "View application" : "Apply now"}
+            {navigating ? "Opening..." : job.applied ? "View application" : "Apply now"}
           </Button>
+
           <Button
             type="button"
             variant="outline"
             size="sm"
             className="rounded-full"
+            onClick={removeSaved}
+            disabled={removeDisabled}
           >
-            Remove
+            {removing ? (
+              <span className="inline-flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Removing...
+              </span>
+            ) : (
+              "Remove"
+            )}
           </Button>
         </div>
       </div>

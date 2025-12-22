@@ -13,6 +13,8 @@ import {
   Phone,
   MapPin,
   Save,
+  FileText,
+  Upload,
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -240,7 +242,8 @@ export default function ProfilePage() {
     } catch (e: any) {
       console.error("Profile save failed:", e);
       toast.error(
-        e?.response?.data?.message || "Failed to save profile. Please try again."
+        e?.response?.data?.message ||
+          "Failed to save profile. Please try again."
       );
     } finally {
       setSaving(false);
@@ -324,6 +327,8 @@ export default function ProfilePage() {
                   onAddSkill={handleAddSkill}
                   onRemoveSkill={handleRemoveSkill}
                 />
+                {/* NEW: Resume upload card */}
+                <ResumeUploadSection />
               </>
             ) : (
               <>
@@ -798,6 +803,151 @@ function CandidateSkillsCard({
               </span>
             ))}
           </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ---------- CANDIDATE RESUME UPLOAD ---------- */
+
+function ResumeUploadSection() {
+  const [currentUrl, setCurrentUrl] = React.useState<string | null>(null);
+  const [loading, setLoading] = React.useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  // Fetch current resume URL once
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
+    const storedRole = window.localStorage.getItem(ROLE_KEY) as Role | null;
+
+    if (!token || storedRole !== "candidate") return;
+
+    const load = async () => {
+      try {
+        const res = await axios.get<{ url: string | null }>(
+          "/api/profile/resume",
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        setCurrentUrl(res.data.url ?? null);
+      } catch (err) {
+        console.error("Failed to fetch resume URL:", err);
+      }
+    };
+
+    load();
+  }, []);
+
+  const handleUpload = async () => {
+    if (typeof window === "undefined") return;
+
+    const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
+    const storedRole = window.localStorage.getItem(ROLE_KEY) as Role | null;
+
+    if (!token) {
+      toast.error("You are not logged in.");
+      return;
+    }
+    if (storedRole !== "candidate") {
+      toast.error("Only candidates can upload resumes.");
+      return;
+    }
+
+    const file = fileInputRef.current?.files?.[0];
+    if (!file) {
+      toast.error("Please choose a resume file first.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("resume", file);
+
+    try {
+      setLoading(true);
+      const res = await axios.post<{ url: string }>(
+        "/api/profile/resume",
+        formData,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      setCurrentUrl(res.data.url);
+      toast.success("Resume uploaded successfully.");
+    } catch (err: any) {
+      console.error("Resume upload error:", err);
+      toast.error(
+        err?.response?.data?.message ?? "Failed to upload resume."
+      );
+    } finally {
+      setLoading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
+  return (
+    <Card className="border bg-background shadow-sm">
+      <CardHeader>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <CardTitle className="text-sm font-semibold">
+              Resume upload
+            </CardTitle>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Upload your latest resume (PDF or Word). It will be attached to
+              your applications.
+            </p>
+          </div>
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10">
+            <FileText className="h-4 w-4 text-primary" />
+          </div>
+        </div>
+      </CardHeader>
+
+      <CardContent>
+        {/* NOTE: no <form> here, just a div */}
+        <div className="flex flex-col gap-3 md:flex-row md:items-end">
+          <div className="flex-1 space-y-1.5">
+            <Label htmlFor="resume">Resume file</Label>
+            <Input
+              id="resume"
+              type="file"
+              ref={fileInputRef}
+              accept=".pdf,.doc,.docx"
+              disabled={loading}
+              className="bg-card"
+            />
+            {currentUrl && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Current resume:{" "}
+                <a
+                  href={currentUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-primary underline"
+                >
+                  View / download
+                </a>
+              </p>
+            )}
+          </div>
+
+          <Button
+            type="button"
+            size="sm"
+            className="w-full rounded-full md:w-auto"
+            disabled={loading}
+            onClick={handleUpload}
+          >
+            <Upload className="mr-1.5 h-3.5 w-3.5" />
+            {loading ? "Uploading..." : "Upload resume"}
+          </Button>
         </div>
       </CardContent>
     </Card>

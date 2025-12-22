@@ -5,6 +5,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
+import toast from "react-hot-toast";
 import {
   Briefcase,
   Filter,
@@ -18,17 +19,32 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent,
-} from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 type Role = "candidate" | "employer";
 
 const AUTH_TOKEN_KEY = "hireorbit_token";
 const ROLE_KEY = "hireorbit_role";
+
+/**
+ * IMPORTANT:
+ * Your backend uses:
+ * - applied
+ * - shortlisted
+ * - interview_scheduled
+ * - offered
+ * - rejected
+ * - hired
+ *
+ * So we align UI types to backend enum to avoid breaking filters/labels.
+ */
+type ApplicationStatus =
+  | "applied"
+  | "shortlisted"
+  | "interview_scheduled"
+  | "offered"
+  | "rejected"
+  | "hired";
 
 /* ---------- Types expected from API ---------- */
 
@@ -38,13 +54,7 @@ type CandidateApplication = {
   jobTitle: string;
   company: string;
   location: string;
-  status:
-    | "applied"
-    | "screening"
-    | "interview"
-    | "offer"
-    | "rejected"
-    | "hired";
+  status: ApplicationStatus;
   step: string;
   appliedAt: string;
   nextInterviewAt?: string | null;
@@ -67,13 +77,7 @@ type EmployerApplication = {
   jobId: string;
   candidateName: string;
   candidateEmail: string;
-  status:
-    | "applied"
-    | "screening"
-    | "interview"
-    | "offer"
-    | "rejected"
-    | "hired";
+  status: ApplicationStatus;
   step: string;
   appliedAt: string;
   nextInterviewAt?: string | null;
@@ -88,13 +92,15 @@ type EmployerApplicationsResponse = {
   applications: EmployerApplication[];
 };
 
+type TabKey = "all" | "active" | "interview" | "rejected";
+
 export default function ApplicationsPage() {
   const router = useRouter();
 
   const [role, setRole] = React.useState<Role | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [loadingList, setLoadingList] = React.useState(false);
-  const [activeTab, setActiveTab] = React.useState<"all" | "active" | "interview" | "rejected">("all");
+  const [activeTab, setActiveTab] = React.useState<TabKey>("all");
 
   const [candidateData, setCandidateData] =
     React.useState<CandidateApplicationsResponse | null>(null);
@@ -104,8 +110,8 @@ export default function ApplicationsPage() {
   // Load role + applications
   React.useEffect(() => {
     if (typeof window === "undefined") return;
-    const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
 
+    const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
     if (!token) {
       router.replace("/login");
       return;
@@ -113,12 +119,12 @@ export default function ApplicationsPage() {
 
     const storedRole = window.localStorage.getItem(ROLE_KEY) as Role | null;
     if (!storedRole) {
-      // If role missing, send user to profile/dashboard to refresh it
       router.replace("/dashboard");
       return;
     }
 
     setRole(storedRole);
+
     let cancelled = false;
 
     const load = async () => {
@@ -129,22 +135,19 @@ export default function ApplicationsPage() {
         if (storedRole === "candidate") {
           const { data } = await axios.get<CandidateApplicationsResponse>(
             "/api/applications/candidate",
-            {
-              headers: { Authorization: `Bearer ${token}` },
-            }
+            { headers: { Authorization: `Bearer ${token}` } }
           );
           if (!cancelled) setCandidateData(data);
         } else {
           const { data } = await axios.get<EmployerApplicationsResponse>(
             "/api/applications/employer",
-            {
-              headers: { Authorization: `Bearer ${token}` },
-            }
+            { headers: { Authorization: `Bearer ${token}` } }
           );
           if (!cancelled) setEmployerData(data);
         }
       } catch (error) {
         console.error("[Applications] load error:", error);
+        if (!cancelled) toast.error("Failed to load applications.");
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -183,9 +186,7 @@ export default function ApplicationsPage() {
           <Card className="border bg-background shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between gap-2">
               <CardTitle className="text-sm font-semibold">
-                {isCandidate
-                  ? "Your applications"
-                  : "Applications across your jobs"}
+                {isCandidate ? "Your applications" : "Applications across your jobs"}
               </CardTitle>
 
               <div className="flex items-center gap-2">
@@ -202,12 +203,7 @@ export default function ApplicationsPage() {
             </CardHeader>
 
             <CardContent className="space-y-4">
-              <Tabs
-                value={activeTab}
-                onValueChange={(v) =>
-                  setActiveTab(v as "all" | "active" | "interview" | "rejected")
-                }
-              >
+              <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabKey)}>
                 <TabsList className="grid w-full grid-cols-4">
                   <TabsTrigger value="all">All</TabsTrigger>
                   <TabsTrigger value="active">Active</TabsTrigger>
@@ -215,22 +211,45 @@ export default function ApplicationsPage() {
                   <TabsTrigger value="rejected">Rejected</TabsTrigger>
                 </TabsList>
 
-                <TabsContent value={activeTab} className="mt-4">
-                  {loadingList ? (
-                    <div className="flex min-h-40 items-center justify-center">
-                      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : isCandidate ? (
-                    <CandidateApplicationsList
-                      data={candidateData}
-                      filter={activeTab}
-                    />
-                  ) : (
-                    <EmployerApplicationsList
-                      data={employerData}
-                      filter={activeTab}
-                    />
-                  )}
+                {/* ✅ Correct shadcn TabsContent usage: one per value */}
+                <TabsContent value="all" className="mt-4">
+                  {renderList({
+                    loadingList,
+                    isCandidate,
+                    candidateData,
+                    employerData,
+                    filter: "all",
+                  })}
+                </TabsContent>
+
+                <TabsContent value="active" className="mt-4">
+                  {renderList({
+                    loadingList,
+                    isCandidate,
+                    candidateData,
+                    employerData,
+                    filter: "active",
+                  })}
+                </TabsContent>
+
+                <TabsContent value="interview" className="mt-4">
+                  {renderList({
+                    loadingList,
+                    isCandidate,
+                    candidateData,
+                    employerData,
+                    filter: "interview",
+                  })}
+                </TabsContent>
+
+                <TabsContent value="rejected" className="mt-4">
+                  {renderList({
+                    loadingList,
+                    isCandidate,
+                    candidateData,
+                    employerData,
+                    filter: "rejected",
+                  })}
                 </TabsContent>
               </Tabs>
             </CardContent>
@@ -251,6 +270,34 @@ export default function ApplicationsPage() {
   );
 }
 
+function renderList({
+  loadingList,
+  isCandidate,
+  candidateData,
+  employerData,
+  filter,
+}: {
+  loadingList: boolean;
+  isCandidate: boolean;
+  candidateData: CandidateApplicationsResponse | null;
+  employerData: EmployerApplicationsResponse | null;
+  filter: TabKey;
+}) {
+  if (loadingList) {
+    return (
+      <div className="flex min-h-40 items-center justify-center">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return isCandidate ? (
+    <CandidateApplicationsList data={candidateData} filter={filter} />
+  ) : (
+    <EmployerApplicationsList data={employerData} filter={filter} />
+  );
+}
+
 /* ---------- HEADER ---------- */
 
 function ApplicationsHeader({ role }: { role: Role }) {
@@ -260,11 +307,7 @@ function ApplicationsHeader({ role }: { role: Role }) {
     <header className="flex flex-col justify-between gap-4 rounded-xl border bg-background px-4 py-4 shadow-sm md:flex-row md:items-center md:px-6">
       <div className="flex items-center gap-4">
         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary md:h-14 md:w-14">
-          {isCandidate ? (
-            <Briefcase className="h-6 w-6" />
-          ) : (
-            <User className="h-6 w-6" />
-          )}
+          {isCandidate ? <Briefcase className="h-6 w-6" /> : <User className="h-6 w-6" />}
         </div>
         <div className="space-y-1">
           <h1 className="text-lg font-semibold tracking-tight md:text-xl">
@@ -292,16 +335,16 @@ function ApplicationsHeader({ role }: { role: Role }) {
 
 /* ---------- STATUS HELPERS ---------- */
 
-function statusLabel(status: CandidateApplication["status"]) {
+function statusLabel(status: ApplicationStatus) {
   switch (status) {
     case "applied":
       return "Applied";
-    case "screening":
-      return "Screening";
-    case "interview":
-      return "Interview";
-    case "offer":
-      return "Offer";
+    case "shortlisted":
+      return "Shortlisted";
+    case "interview_scheduled":
+      return "Interview scheduled";
+    case "offered":
+      return "Offered";
     case "rejected":
       return "Rejected";
     case "hired":
@@ -311,7 +354,7 @@ function statusLabel(status: CandidateApplication["status"]) {
   }
 }
 
-function statusBadgeVariant(status: CandidateApplication["status"]):
+function statusBadgeVariant(status: ApplicationStatus):
   | "default"
   | "secondary"
   | "outline"
@@ -319,9 +362,9 @@ function statusBadgeVariant(status: CandidateApplication["status"]):
   switch (status) {
     case "applied":
       return "secondary";
-    case "screening":
-    case "interview":
-    case "offer":
+    case "shortlisted":
+    case "interview_scheduled":
+    case "offered":
       return "default";
     case "rejected":
       return "destructive";
@@ -334,37 +377,19 @@ function statusBadgeVariant(status: CandidateApplication["status"]):
 
 /* ---------- CANDIDATE STATS ---------- */
 
-function CandidateStatsCard({
-  data,
-}: {
-  data: CandidateApplicationsResponse | null;
-}) {
+function CandidateStatsCard({ data }: { data: CandidateApplicationsResponse | null }) {
   const stats = data?.stats;
   return (
     <Card className="border bg-background shadow-sm">
       <CardHeader>
-        <CardTitle className="text-sm font-semibold">
-          Application summary
-        </CardTitle>
+        <CardTitle className="text-sm font-semibold">Application summary</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatPill
-            label="Total"
-            value={stats?.total ?? 0}
-          />
-          <StatPill
-            label="Active"
-            value={stats?.active ?? 0}
-          />
-          <StatPill
-            label="Offers"
-            value={stats?.offers ?? 0}
-          />
-          <StatPill
-            label="Rejected"
-            value={stats?.rejected ?? 0}
-          />
+          <StatPill label="Total" value={stats?.total ?? 0} />
+          <StatPill label="Active" value={stats?.active ?? 0} />
+          <StatPill label="Offers" value={stats?.offers ?? 0} />
+          <StatPill label="Rejected" value={stats?.rejected ?? 0} />
         </div>
       </CardContent>
     </Card>
@@ -373,33 +398,18 @@ function CandidateStatsCard({
 
 /* ---------- EMPLOYER STATS ---------- */
 
-function EmployerStatsCard({
-  data,
-}: {
-  data: EmployerApplicationsResponse | null;
-}) {
+function EmployerStatsCard({ data }: { data: EmployerApplicationsResponse | null }) {
   const stats = data?.stats;
   return (
     <Card className="border bg-background shadow-sm">
       <CardHeader>
-        <CardTitle className="text-sm font-semibold">
-          Pipeline overview
-        </CardTitle>
+        <CardTitle className="text-sm font-semibold">Pipeline overview</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <StatPill
-            label="Total"
-            value={stats?.total ?? 0}
-          />
-          <StatPill
-            label="Today"
-            value={stats?.today ?? 0}
-          />
-          <StatPill
-            label="This week"
-            value={stats?.thisWeek ?? 0}
-          />
+          <StatPill label="Total" value={stats?.total ?? 0} />
+          <StatPill label="Today" value={stats?.today ?? 0} />
+          <StatPill label="This week" value={stats?.thisWeek ?? 0} />
         </div>
       </CardContent>
     </Card>
@@ -410,14 +420,12 @@ function EmployerTipsCard() {
   return (
     <Card className="border bg-background shadow-sm">
       <CardHeader>
-        <CardTitle className="text-sm font-semibold">
-          Tips for better responses
-        </CardTitle>
+        <CardTitle className="text-sm font-semibold">Tips for better responses</CardTitle>
       </CardHeader>
       <CardContent className="space-y-2 text-xs text-muted-foreground">
         <p>
-          Responding quickly to candidates and keeping your pipeline clean
-          improves your employer brand.
+          Responding quickly to candidates and keeping your pipeline clean improves
+          your employer brand.
         </p>
         <ul className="list-disc space-y-1 pl-4">
           <li>Move candidates to screening/interview as soon as you review.</li>
@@ -445,7 +453,7 @@ function CandidateApplicationsList({
   filter,
 }: {
   data: CandidateApplicationsResponse | null;
-  filter: "all" | "active" | "interview" | "rejected";
+  filter: TabKey;
 }) {
   if (!data || data.applications.length === 0) {
     return (
@@ -458,11 +466,13 @@ function CandidateApplicationsList({
 
   const filtered = data.applications.filter((app) => {
     if (filter === "all") return true;
+
+    // ✅ Same logic, just aligned to backend enum
     if (filter === "active") {
-      return ["applied", "screening", "interview", "offer"].includes(app.status);
+      return ["applied", "shortlisted", "interview_scheduled", "offered"].includes(app.status);
     }
     if (filter === "interview") {
-      return ["interview", "offer"].includes(app.status);
+      return ["interview_scheduled", "offered"].includes(app.status);
     }
     if (filter === "rejected") {
       return ["rejected"].includes(app.status);
@@ -488,13 +498,12 @@ function CandidateApplicationsList({
 }
 
 function CandidateApplicationCard({ application }: { application: CandidateApplication }) {
-  const appliedDate = new Date(application.appliedAt);
-  const interviewDate = application.nextInterviewAt
-    ? new Date(application.nextInterviewAt)
-    : null;
+  const router = useRouter();
 
-  const isUpcomingInterview =
-    interviewDate && interviewDate.getTime() > Date.now();
+  const appliedDate = new Date(application.appliedAt);
+  const interviewDate = application.nextInterviewAt ? new Date(application.nextInterviewAt) : null;
+
+  const isUpcomingInterview = interviewDate && interviewDate.getTime() > Date.now();
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border bg-card px-3 py-3 text-xs sm:px-4 sm:py-3">
@@ -523,34 +532,28 @@ function CandidateApplicationCard({ application }: { application: CandidateAppli
           <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
             <Calendar className="h-3 w-3" />
             Applied{" "}
-            {appliedDate.toLocaleDateString(undefined, {
-              month: "short",
-              day: "2-digit",
-            })}
+            {appliedDate.toLocaleDateString(undefined, { month: "short", day: "2-digit" })}
           </span>
           {isUpcomingInterview && (
             <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary">
               <Calendar className="h-3 w-3" />
               Interview{" "}
-              {interviewDate!.toLocaleDateString(undefined, {
-                month: "short",
-                day: "2-digit",
-              })}
+              {interviewDate!.toLocaleDateString(undefined, { month: "short", day: "2-digit" })}
             </span>
           )}
         </div>
       </div>
 
       <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-        <p className="max-w-xl text-[11px] text-muted-foreground">
-          {application.step}
-        </p>
+        <p className="max-w-xl text-[11px] text-muted-foreground">{application.step}</p>
 
+        {/* ✅ No logic change: just wires existing button to your detail route */}
         <Button
           type="button"
           variant="outline"
           size="sm"
           className="rounded-full"
+          onClick={() => router.push(`/dashboard/applications/${application.id}`)}
         >
           View details
         </Button>
@@ -566,7 +569,7 @@ function EmployerApplicationsList({
   filter,
 }: {
   data: EmployerApplicationsResponse | null;
-  filter: "all" | "active" | "interview" | "rejected";
+  filter: TabKey;
 }) {
   if (!data || data.applications.length === 0) {
     return (
@@ -579,11 +582,13 @@ function EmployerApplicationsList({
 
   const filtered = data.applications.filter((app) => {
     if (filter === "all") return true;
+
+    // ✅ Same logic, aligned to backend enum
     if (filter === "active") {
-      return ["applied", "screening", "interview", "offer"].includes(app.status);
+      return ["applied", "shortlisted", "interview_scheduled", "offered"].includes(app.status);
     }
     if (filter === "interview") {
-      return ["interview", "offer"].includes(app.status);
+      return ["interview_scheduled", "offered"].includes(app.status);
     }
     if (filter === "rejected") {
       return ["rejected"].includes(app.status);
@@ -609,13 +614,12 @@ function EmployerApplicationsList({
 }
 
 function EmployerApplicationCard({ application }: { application: EmployerApplication }) {
-  const appliedDate = new Date(application.appliedAt);
-  const interviewDate = application.nextInterviewAt
-    ? new Date(application.nextInterviewAt)
-    : null;
+  const router = useRouter();
 
-  const isUpcomingInterview =
-    interviewDate && interviewDate.getTime() > Date.now();
+  const appliedDate = new Date(application.appliedAt);
+  const interviewDate = application.nextInterviewAt ? new Date(application.nextInterviewAt) : null;
+
+  const isUpcomingInterview = interviewDate && interviewDate.getTime() > Date.now();
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border bg-card px-3 py-3 text-xs sm:px-4 sm:py-3">
@@ -647,28 +651,20 @@ function EmployerApplicationCard({ application }: { application: EmployerApplica
           <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
             <Calendar className="h-3 w-3" />
             Applied{" "}
-            {appliedDate.toLocaleDateString(undefined, {
-              month: "short",
-              day: "2-digit",
-            })}
+            {appliedDate.toLocaleDateString(undefined, { month: "short", day: "2-digit" })}
           </span>
           {isUpcomingInterview && (
             <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary">
               <Calendar className="h-3 w-3" />
               Interview{" "}
-              {interviewDate!.toLocaleDateString(undefined, {
-                month: "short",
-                day: "2-digit",
-              })}
+              {interviewDate!.toLocaleDateString(undefined, { month: "short", day: "2-digit" })}
             </span>
           )}
         </div>
       </div>
 
       <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-        <p className="max-w-xl text-[11px] text-muted-foreground">
-          {application.step}
-        </p>
+        <p className="max-w-xl text-[11px] text-muted-foreground">{application.step}</p>
 
         <div className="flex flex-wrap items-center gap-2">
           <Button
@@ -676,14 +672,12 @@ function EmployerApplicationCard({ application }: { application: EmployerApplica
             variant="outline"
             size="sm"
             className="rounded-full"
+            // Optional: wire to candidate profile page if you have it
+            onClick={() => router.push(`/dashboard/candidates/${application.id}`)}
           >
             View profile
           </Button>
-          <Button
-            type="button"
-            size="sm"
-            className="rounded-full"
-          >
+          <Button type="button" size="sm" className="rounded-full">
             Move stage
           </Button>
         </div>
