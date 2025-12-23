@@ -2,13 +2,7 @@
 
 import { NextResponse } from "next/server";
 import { db } from "@/config/db";
-import {
-  users,
-  jobs,
-  applications,
-  userProfiles,
-  userSkills,
-} from "@/config/schema";
+import { users, jobs, applications, userProfiles, userSkills } from "@/config/schema";
 import { eq } from "drizzle-orm";
 import { verifyJwt } from "@/lib/auth";
 
@@ -32,10 +26,14 @@ type CandidatesResponse = {
   total: number;
 };
 
+function getBearer(req: Request) {
+  const h = req.headers.get("authorization") || "";
+  const [t, v] = h.split(" ");
+  return t === "Bearer" ? v : null;
+}
+
 // Map application_status -> pipeline bucket used by the dashboard
-function mapApplicationStatusToCandidateStatus(
-  appStatus: string
-): CandidateStatus {
+function mapApplicationStatusToCandidateStatus(appStatus: string): CandidateStatus {
   switch (appStatus) {
     case "screening":
       return "reviewing";
@@ -63,21 +61,28 @@ const STATUS_RANK: Record<CandidateStatus, number> = {
 
 export async function GET(req: Request) {
   try {
-    const authHeader = req.headers.get("authorization") ?? "";
-    if (!authHeader.startsWith("Bearer ")) {
+    const token = getBearer(req);
+    if (!token) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    const token = authHeader.slice(7);
-    const payload = verifyJwt(token);
-
+    const payload: any = verifyJwt(token);
     if (!payload || !payload.sub) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    const employerId = payload.sub as string;
-    const role = (payload as any).role as "candidate" | "employer" | undefined;
+    // ✅ normalize employerId type (UUID/string/etc.)
+    const employerId = String(payload.sub);
 
+    // ✅ robust role read (same employer-only logic)
+    const role: string | undefined =
+      payload.role ??
+      payload?.user?.role ??
+      payload?.claims?.role ??
+      payload?.app_metadata?.role ??
+      payload?.publicMetadata?.role;
+
+    // If role exists and is not employer => 403 (same logic you had)
     if (role && role !== "employer") {
       return NextResponse.json(
         { message: "Only employers can access candidates." },
@@ -85,8 +90,12 @@ export async function GET(req: Request) {
       );
     }
 
-    // All applications into jobs belonging to this employer,
-    // joined with candidate info, profile, and skills.
+    // (Optional but safe) If role is missing entirely, still keep your employer-only intent:
+    // If you want to be strict, uncomment:
+    // if (!role) {
+    //   return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    // }
+
     const rows = await db
       .select({
         candidateId: users.id,
@@ -96,11 +105,9 @@ export async function GET(req: Request) {
         applicationStatus: applications.status,
         applicationCreatedAt: applications.createdAt,
         nextInterviewAt: applications.nextInterviewAt,
-        // profile fields (nullable)
         headline: userProfiles.headline,
         location: userProfiles.location,
         experienceYears: userProfiles.experienceYears,
-        // one skill per row (nullable)
         skill: userSkills.skill,
       })
       .from(applications)
@@ -151,9 +158,9 @@ export async function GET(req: Request) {
         };
         byCandidate.set(candidateId, agg);
       } else {
-        // Fill missing basic fields from any row that has them
         if (!agg.headline && row.headline) agg.headline = row.headline;
         if (!agg.location && row.location) agg.location = row.location;
+
         if (
           (agg.experienceYears === undefined || agg.experienceYears === null) &&
           row.experienceYears !== null &&
@@ -162,24 +169,15 @@ export async function GET(req: Request) {
           agg.experienceYears = row.experienceYears;
         }
 
-        // Update status if this row represents a further stage in the pipeline
         if (rank < agg.statusRank) {
           agg.status = mappedStatus;
           agg.statusRank = rank;
         }
       }
 
-      // Track unique jobs this candidate applied to (for this employer)
-      if (row.jobId) {
-        agg.jobIds.add(row.jobId);
-      }
+      if (row.jobId) agg.jobIds.add(row.jobId);
+      if (row.skill) agg.skills.add(row.skill);
 
-      // Aggregate skills (deduplicated)
-      if (row.skill) {
-        agg.skills.add(row.skill);
-      }
-
-      // lastActiveAt = latest of createdAt / nextInterviewAt across all apps
       const createdAt = row.applicationCreatedAt;
       const interviewAt = row.nextInterviewAt;
       const activity = interviewAt ?? createdAt;
@@ -212,9 +210,6 @@ export async function GET(req: Request) {
     return NextResponse.json(response, { status: 200 });
   } catch (error) {
     console.error("[/api/employer/candidates] GET error:", error);
-    return NextResponse.json(
-      { message: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ message: "Internal server error" }, { status: 500 });
   }
 }

@@ -1,9 +1,8 @@
 // app/api/applications/[id]/route.ts
-
 import { NextResponse } from "next/server";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/config/db";
 import { applications, jobs, users } from "@/config/schema";
-import { and, eq } from "drizzle-orm";
 import { verifyJwt } from "@/lib/auth";
 
 export const runtime = "nodejs";
@@ -21,7 +20,13 @@ export async function GET(
   ctx: { params: Promise<{ id: string }> }
 ) {
   try {
+    // ✅ Next.js 16: params is a Promise; unwrap before access
     const { id } = await ctx.params;
+
+    // (Optional safety; does not change your business logic)
+    if (!id) {
+      return NextResponse.json({ message: "Not found" }, { status: 404 });
+    }
 
     const authHeader = req.headers.get("authorization") ?? "";
     if (!authHeader.startsWith("Bearer ")) {

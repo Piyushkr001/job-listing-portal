@@ -1,9 +1,8 @@
-// app/api/applications/[id]/events/route.ts
 import { NextResponse } from "next/server";
-import { and, desc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 
 import { db } from "@/config/db";
-import { applications, users, applicationEvents } from "@/config/schema";
+import { applicationEvents, applications, jobs, users } from "@/config/schema";
 import { verifyJwt } from "@/lib/auth";
 
 export const runtime = "nodejs";
@@ -12,22 +11,16 @@ export const revalidate = 0;
 
 function toISO(value: unknown): string {
   if (!value) return new Date(0).toISOString();
-  if (value instanceof Date) return value.toISOString();
-  return new Date(value as any).toISOString();
+
+  const d = value instanceof Date ? value : new Date(value as any);
+  if (Number.isNaN(d.getTime())) return new Date(0).toISOString();
+
+  return d.toISOString();
 }
 
-export async function GET(
-  req: Request,
-  ctx: { params: Promise<{ id: string }> }
-) {
+export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
-    // ✅ Next.js 16: params is a Promise; unwrap before access
-    const { id } = await ctx.params;
-
-    // Optional safety; does not change your business logic
-    if (!id) {
-      return NextResponse.json({ message: "Not found" }, { status: 404 });
-    }
+    const { id: applicationId } = await ctx.params;
 
     const authHeader = req.headers.get("authorization") ?? "";
     if (!authHeader.startsWith("Bearer ")) {
@@ -40,18 +33,18 @@ export async function GET(
     if (!payload?.sub) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
-
-    if (payload.role !== "candidate") {
+    if (payload.role !== "employer") {
       return NextResponse.json({ message: "Forbidden" }, { status: 403 });
     }
 
-    const candidateId = payload.sub as string;
+    const employerId = payload.sub as string;
 
-    // ownership check
+    // Ensure employer owns the job for this application
     const owns = await db
       .select({ id: applications.id })
       .from(applications)
-      .where(and(eq(applications.id, id), eq(applications.candidateId, candidateId)))
+      .innerJoin(jobs, eq(applications.jobId, jobs.id))
+      .where(and(eq(applications.id, applicationId), eq(jobs.employerId, employerId)))
       .limit(1);
 
     if (!owns[0]) {
@@ -71,8 +64,9 @@ export async function GET(
       })
       .from(applicationEvents)
       .leftJoin(users, eq(applicationEvents.actorId, users.id))
-      .where(eq(applicationEvents.applicationId, id))
-      .orderBy(desc(applicationEvents.createdAt))
+      .where(eq(applicationEvents.applicationId, applicationId))
+      // ✅ Timeline usually reads best oldest -> newest
+      .orderBy(asc(applicationEvents.createdAt))
       .limit(100);
 
     const events = rows.map((r) => ({
@@ -90,7 +84,7 @@ export async function GET(
 
     return NextResponse.json({ events }, { status: 200 });
   } catch (e) {
-    console.error("[/api/applications/[id]/events] error:", e);
+    console.error("[/api/employer/applications/[id]/events] error:", e);
     return NextResponse.json({ message: "Internal server error" }, { status: 500 });
   }
 }

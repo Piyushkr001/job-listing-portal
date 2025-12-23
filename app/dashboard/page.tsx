@@ -630,11 +630,10 @@ function EmployerJobsPanel({
             <div className="flex items-center justify-between gap-2">
               <p className="font-medium">{job.title}</p>
               <span
-                className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                  job.status === "Open"
+                className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${job.status === "Open"
                     ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200"
                     : "bg-muted text-muted-foreground"
-                }`}
+                  }`}
               >
                 {job.status}
               </span>
@@ -660,6 +659,10 @@ function EmployerPipelinePanel({
 }: {
   stages: EmployerDashboardResponse["pipeline"];
 }) {
+  const router = useRouter();
+
+  const stageToQuery = (label: string) => encodeURIComponent(label.trim());
+
   return (
     <Card className="flex h-full flex-col border bg-background shadow-sm">
       <CardHeader>
@@ -696,7 +699,16 @@ function EmployerPipelinePanel({
                   </p>
                 </div>
               </div>
-              <Button variant="ghost" size="sm" className="rounded-full text-xs">
+
+              {/* ✅ IMPLEMENTED */}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="rounded-full text-xs"
+                onClick={() =>
+                  router.push(`/dashboard/pipeline?stage=${stageToQuery(stage.label)}`)
+                }
+              >
                 View
               </Button>
             </div>
@@ -705,7 +717,13 @@ function EmployerPipelinePanel({
 
         <Separator className="my-2" />
 
-        <Button variant="ghost" size="sm" className="w-full rounded-full text-xs">
+        {/* ✅ IMPLEMENTED */}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full rounded-full text-xs"
+          onClick={() => router.push("/dashboard/pipeline")}
+        >
           Open candidate pipeline
         </Button>
       </CardContent>
