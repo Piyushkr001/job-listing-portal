@@ -12,7 +12,7 @@ import {
   Users,
   Settings,
   LogOut,
-  Menu,
+  Sidebar,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -138,7 +138,7 @@ export function DashboardSidebar({ role }: { role: Role }) {
           <Sheet>
             <SheetTrigger asChild>
               <Button variant="outline" size="icon" className="rounded-full">
-                <Menu className="h-5 w-5" />
+                <Sidebar className="h-5 w-5" />
               </Button>
             </SheetTrigger>
 

@@ -13,7 +13,6 @@ import {
   Users,
   MapPin,
   Clock,
-  PauseCircle,
   CheckCircle2,
   CircleDot,
 } from "lucide-react";
@@ -21,28 +20,24 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent,
-} from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 type Role = "candidate" | "employer";
 
 const AUTH_TOKEN_KEY = "hireorbit_token";
 const ROLE_KEY = "hireorbit_role";
 
-type JobStatus = "draft" | "open" | "paused" | "closed";
+// ✅ Option A: only these statuses exist in DB enum
+type JobStatus = "draft" | "open" | "closed";
 
 type EmployerJobItem = {
   id: string;
   title: string;
   location: string;
-  employmentType: string; // e.g. "Full-time", "Internship"
+  employmentType: string;
   remote: boolean;
   status: JobStatus;
-  createdAt: string; // ISO string
+  createdAt: string;
   applicationsCount: number;
 };
 
@@ -57,7 +52,7 @@ export default function EmployerJobsPage() {
   const [loading, setLoading] = React.useState(true);
   const [jobs, setJobs] = React.useState<EmployerJobItem[]>([]);
   const [activeTab, setActiveTab] = React.useState<
-    "all" | "open" | "draft" | "paused" | "closed"
+    "all" | "open" | "draft" | "closed"
   >("all");
 
   React.useEffect(() => {
@@ -86,14 +81,18 @@ export default function EmployerJobsPage() {
 
         const { data } = await axios.get<EmployerJobsResponse>(
           "/api/employer/jobs",
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
+          { headers: { Authorization: `Bearer ${token}` } }
         );
 
         if (cancelled) return;
 
-        setJobs(data.jobs || []);
+        // Defensive normalize (if older UI ever produced "paused")
+        const normalized = (data.jobs || []).map((j) => ({
+          ...j,
+          status: (j.status === ("paused" as any) ? "closed" : j.status) as JobStatus,
+        }));
+
+        setJobs(normalized);
       } catch (error) {
         console.error("[EmployerJobs] load error:", error);
         toast.error("Failed to load your jobs. Please try again.");
@@ -109,7 +108,6 @@ export default function EmployerJobsPage() {
   }, [router]);
 
   const handlePostJob = () => {
-    // Change this route if your "post job" page is different
     router.push("/dashboard/jobs-new");
   };
 
@@ -144,7 +142,6 @@ export default function EmployerJobsPage() {
       <JobsHeader onPostJob={handlePostJob} />
 
       <div className="flex flex-col gap-4 lg:flex-row">
-        {/* LEFT: main jobs list */}
         <div className="flex w-full flex-1 flex-col gap-4">
           <JobsListCard
             jobs={filteredJobs}
@@ -154,7 +151,6 @@ export default function EmployerJobsPage() {
           />
         </div>
 
-        {/* RIGHT: stats */}
         <div className="flex w-full max-w-full flex-col gap-4 lg:max-w-xs">
           <JobsStatsCard
             totalJobs={totalJobs}
@@ -168,8 +164,6 @@ export default function EmployerJobsPage() {
     </div>
   );
 }
-
-/* ---------- HEADER ---------- */
 
 function JobsHeader({ onPostJob }: { onPostJob: () => void }) {
   return (
@@ -192,7 +186,7 @@ function JobsHeader({ onPostJob }: { onPostJob: () => void }) {
             </span>
             <span className="text-muted-foreground">·</span>
             <span className="text-muted-foreground">
-              Post, pause, or close openings as your hiring needs change.
+              Post, or close openings as your hiring needs change.
             </span>
           </div>
         </div>
@@ -213,8 +207,6 @@ function JobsHeader({ onPostJob }: { onPostJob: () => void }) {
   );
 }
 
-/* ---------- JOBS LIST CARD ---------- */
-
 function JobsListCard({
   jobs,
   total,
@@ -223,34 +215,29 @@ function JobsListCard({
 }: {
   jobs: EmployerJobItem[];
   total: number;
-  activeTab: "all" | "open" | "draft" | "paused" | "closed";
-  setActiveTab: (v: "all" | "open" | "draft" | "paused" | "closed") => void;
+  activeTab: "all" | "open" | "draft" | "closed";
+  setActiveTab: (v: "all" | "open" | "draft" | "closed") => void;
 }) {
   return (
     <Card className="border bg-background shadow-sm">
-      {/* Tabs now wrap header + content, so TabsContent is inside Tabs */}
       <Tabs
         value={activeTab}
-        onValueChange={(v) =>
-          setActiveTab(v as "all" | "open" | "draft" | "paused" | "closed")
-        }
+        onValueChange={(v) => setActiveTab(v as any)}
         className="w-full"
       >
         <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="space-y-1">
-            <CardTitle className="text-sm font-semibold">
-              Job postings
-            </CardTitle>
+            <CardTitle className="text-sm font-semibold">Job postings</CardTitle>
             <p className="text-xs text-muted-foreground">
               Showing {jobs.length} of {total} jobs based on the selected status.
             </p>
           </div>
 
-          <TabsList className="grid w-full grid-cols-5 md:inline-flex md:w-auto">
+          {/* ✅ Removed paused */}
+          <TabsList className="grid w-full grid-cols-4 md:inline-flex md:w-auto">
             <TabsTrigger value="all">All</TabsTrigger>
             <TabsTrigger value="open">Open</TabsTrigger>
             <TabsTrigger value="draft">Draft</TabsTrigger>
-            <TabsTrigger value="paused">Paused</TabsTrigger>
             <TabsTrigger value="closed">Closed</TabsTrigger>
           </TabsList>
         </CardHeader>
@@ -276,11 +263,8 @@ function JobsListCard({
   );
 }
 
-/* ---------- SINGLE JOB CARD ---------- */
-
 function EmployerJobCard({ job }: { job: EmployerJobItem }) {
   const router = useRouter();
-
   const createdDate = new Date(job.createdAt);
 
   const statusConfig: Record<
@@ -298,27 +282,18 @@ function EmployerJobCard({ job }: { job: EmployerJobItem }) {
       className:
         "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
     },
-    paused: {
-      label: "Paused",
-      Icon: PauseCircle,
-      className:
-        "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400",
-    },
     closed: {
       label: "Closed",
       Icon: CircleDot,
-      className:
-        "border-destructive/40 bg-destructive/10 text-destructive",
+      className: "border-destructive/40 bg-destructive/10 text-destructive",
     },
   };
 
   const statusMeta = statusConfig[job.status];
-
   const workModeLabel = job.remote ? "Remote" : "On-site";
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border bg-card px-3 py-3 text-xs sm:px-4 sm:py-3">
-      {/* Top row: title + status + meta */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex flex-col gap-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -356,8 +331,7 @@ function EmployerJobCard({ job }: { job: EmployerJobItem }) {
           <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
             <span className="inline-flex items-center gap-1">
               <Users className="h-3 w-3" />
-              {job.applicationsCount} application
-              {job.applicationsCount === 1 ? "" : "s"}
+              {job.applicationsCount} application{job.applicationsCount === 1 ? "" : "s"}
             </span>
             <span className="text-muted-foreground">·</span>
             <span>{workModeLabel}</span>
@@ -373,6 +347,7 @@ function EmployerJobCard({ job }: { job: EmployerJobItem }) {
           >
             View applications
           </Button>
+
           <Button
             type="button"
             variant="outline"
@@ -385,16 +360,12 @@ function EmployerJobCard({ job }: { job: EmployerJobItem }) {
         </div>
       </div>
 
-      {/* Optional subtle footer line */}
       <p className="mt-1 max-w-3xl text-[11px] text-muted-foreground">
-        Track candidates, adjust the description, or change the status from the
-        manage posting screen.
+        Track candidates or update the status from the manage posting screen.
       </p>
     </div>
   );
 }
-
-/* ---------- STATS CARD ---------- */
 
 function JobsStatsCard({
   totalJobs,
@@ -412,25 +383,16 @@ function JobsStatsCard({
   return (
     <Card className="border bg-background shadow-sm">
       <CardHeader>
-        <CardTitle className="text-sm font-semibold">
-          Hiring snapshot
-        </CardTitle>
+        <CardTitle className="text-sm font-semibold">Hiring snapshot</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 text-xs text-muted-foreground">
         <div className="grid grid-cols-2 gap-3">
           <StatTile label="Total jobs" value={totalJobs} />
           <StatTile label="Open roles" value={openJobs} emphasis />
-
           <StatTile label="Drafts" value={draftJobs} />
           <StatTile label="Closed" value={closedJobs} />
-
           <StatTile label="Total applications" value={totalApplications} wide />
         </div>
-
-        <p className="text-[11px]">
-          These stats help you quickly understand how active your current hiring
-          pipeline is and where you might want to focus next.
-        </p>
       </CardContent>
     </Card>
   );
@@ -454,11 +416,7 @@ function StatTile({
       }`}
     >
       <span className="text-[11px] text-muted-foreground">{label}</span>
-      <span
-        className={`text-base font-semibold ${
-          emphasis ? "text-primary" : "text-foreground"
-        }`}
-      >
+      <span className={`text-base font-semibold ${emphasis ? "text-primary" : ""}`}>
         {value}
       </span>
     </div>

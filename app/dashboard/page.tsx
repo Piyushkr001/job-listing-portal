@@ -327,7 +327,7 @@ function DashboardHeader({ role }: { role: Role }) {
             <Button
               size="sm"
               className="rounded-full"
-              onClick={() => router.push("/dashboard/jobs/new")}
+              onClick={() => router.push("/dashboard/jobs-new")}
             >
               Post a job
             </Button>
