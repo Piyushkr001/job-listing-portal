@@ -4,7 +4,6 @@ import React from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Linkedin, Instagram, Mail } from "lucide-react";
 import { XLogoIcon } from "@phosphor-icons/react";
@@ -23,6 +22,7 @@ function Footer() {
               height={140}
             />
           </Link>
+
           <p className="max-w-sm text-sm text-muted-foreground">
             HireOrbit connects ambitious companies with top talent through a
             modern, streamlined hiring experience tailored for growing teams.
@@ -44,6 +44,7 @@ function Footer() {
                   <Linkedin className="h-4 w-4" />
                 </Link>
               </Button>
+
               <Button
                 variant="outline"
                 size="icon"
@@ -54,6 +55,7 @@ function Footer() {
                   <XLogoIcon className="h-4 w-4" />
                 </Link>
               </Button>
+
               <Button
                 variant="outline"
                 size="icon"
@@ -66,10 +68,24 @@ function Footer() {
               </Button>
             </div>
           </div>
+
+          {/* Contact quick link (replaces newsletter) */}
+          <div className="mt-1 flex flex-col gap-2">
+            <span className="text-xs font-medium text-muted-foreground">
+              Contact
+            </span>
+            <Link
+              href="/contact"
+              className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <Mail className="h-4 w-4" />
+              Reach us via contact page
+            </Link>
+          </div>
         </div>
 
-        {/* Middle: Link columns */}
-        <div className="flex flex-1 flex-col gap-6 text-sm md:flex-row md:justify-center">
+        {/* Right: Link columns (kept) */}
+        <div className="flex flex-1 flex-col gap-6 text-sm md:flex-row md:justify-between md:gap-14">
           <div className="flex flex-col gap-2">
             <h3 className="text-sm font-semibold">For candidates</h3>
             <Link
@@ -95,22 +111,22 @@ function Footer() {
           <div className="flex flex-col gap-2">
             <h3 className="text-sm font-semibold">For employers</h3>
             <Link
-              href="/employers/post"
+              href="/dashboard/jobs-new"
               className="text-sm text-muted-foreground hover:text-foreground"
             >
               Post a job
             </Link>
             <Link
-              href="/employers"
+              href="/dashboard"
               className="text-sm text-muted-foreground hover:text-foreground"
             >
               Employer dashboard
             </Link>
             <Link
-              href="/pricing"
+              href="/dashboard/candidates"
               className="text-sm text-muted-foreground hover:text-foreground"
             >
-              Pricing
+              Candidates
             </Link>
           </div>
 
@@ -136,7 +152,6 @@ function Footer() {
             </Link>
           </div>
         </div>
-
       </div>
 
       <Separator className="mx-auto w-full max-w-6xl" />
