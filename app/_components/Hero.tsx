@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 
 import {
   ArrowRight,
@@ -19,25 +20,15 @@ import {
   Timer,
   Users,
   Loader2,
+  Zap,
+  ShieldCheck,
+  TrendingUp,
 } from "lucide-react";
 
 /**
  * IMPORTANT:
- * - This component now fetches "Live recommendations" from backend.
- * - Update RECOMMENDED_API to match your actual API route.
- *
- * Expected response shape (example):
- * {
- *   jobs: Array<{
- *     id: string;
- *     title: string;
- *     company?: string;
- *     location?: string;
- *     salary?: string;
- *     type?: string;
- *     tags?: string[];
- *   }>
- * }
+ * - Keep API logic the same.
+ * - We only redesigned UI and component structure.
  */
 
 const RECOMMENDED_API = "/api/jobs/recommended?limit=2";
@@ -61,7 +52,7 @@ function HeroSection() {
   const router = useRouter();
   const [query, setQuery] = React.useState("");
 
-  // Recommendations state
+  // Recommendations state (unchanged logic)
   const [recLoading, setRecLoading] = React.useState(true);
   const [recError, setRecError] = React.useState<string | null>(null);
   const [recommended, setRecommended] = React.useState<RecommendedJob[]>([]);
@@ -75,7 +66,7 @@ function HeroSection() {
     if (e.key === "Enter") goToJobs();
   };
 
-  // Fetch live recommendations (with optional auth header if token exists)
+  // Fetch live recommendations (unchanged logic)
   React.useEffect(() => {
     let cancelled = false;
 
@@ -113,7 +104,7 @@ function HeroSection() {
     };
   }, []);
 
-  // Fallback cards if backend returns empty or fails
+  // Fallback cards if backend returns empty or fails (unchanged logic)
   const fallback: RecommendedJob[] = [
     {
       id: "fallback-1",
@@ -139,119 +130,136 @@ function HeroSection() {
 
   return (
     <section className="relative overflow-hidden border-b bg-background">
-      {/* Background: gradient mesh + grid */}
+      {/* ===== Background (cleaner + more professional) ===== */}
       <div className="pointer-events-none absolute inset-0 -z-10">
-        <div className="absolute -top-24 left-1/2 h-80 w-80 -translate-x-1/2 rounded-full bg-linear-to-tr from-indigo-500/20 via-cyan-400/20 to-emerald-400/20 blur-3xl" />
-        <div className="absolute -bottom-28 -left-20 h-72 w-72 rounded-full bg-linear-to-tr from-emerald-400/20 via-cyan-400/10 to-indigo-500/10 blur-3xl" />
-        <div className="absolute -bottom-24 -right-24 h-72 w-72 rounded-full bg-linear-to-tr from-indigo-500/15 via-cyan-400/10 to-emerald-400/15 blur-3xl" />
+        <div className="absolute -top-32 left-1/2 h-[420px] w-[420px] -translate-x-1/2 rounded-full bg-linear-to-tr from-indigo-500/18 via-cyan-400/14 to-emerald-400/16 blur-3xl" />
+        <div className="absolute -bottom-36 -left-28 h-[380px] w-[380px] rounded-full bg-linear-to-tr from-emerald-400/16 via-cyan-400/10 to-indigo-500/10 blur-3xl" />
+        <div className="absolute -bottom-32 -right-32 h-[380px] w-[380px] rounded-full bg-linear-to-tr from-indigo-500/14 via-cyan-400/10 to-emerald-400/14 blur-3xl" />
 
+        {/* subtle grid */}
         <div
-          className="absolute inset-0 opacity-[0.07]"
+          className="absolute inset-0 opacity-[0.06]"
           style={{
             backgroundImage:
               "linear-gradient(to right, rgb(0 0 0 / 1) 1px, transparent 1px), linear-gradient(to bottom, rgb(0 0 0 / 1) 1px, transparent 1px)",
-            backgroundSize: "56px 56px",
+            backgroundSize: "64px 64px",
           }}
         />
 
-        <div className="absolute inset-0 bg-linear-to-b from-background/20 via-background to-background" />
+        <div className="absolute inset-0 bg-linear-to-b from-background/30 via-background to-background" />
       </div>
 
       <div className="mx-auto w-full max-w-6xl px-4 py-10 sm:py-12 md:py-16 lg:py-20">
-        {/* Responsiveness improvements:
-            - Mobile: stacked, tighter spacing, full-width right card below
-            - Tablet: 2-column with better gaps
-            - Desktop: balanced proportions and consistent vertical alignment
-        */}
-        <div className="grid items-start gap-10 md:grid-cols-[1.1fr,0.9fr] md:gap-10 lg:gap-12">
-          {/* LEFT */}
-          <div className="space-y-7 md:pt-2">
+        {/* ===== Layout: flex-based, responsive, professional spacing ===== */}
+        <div className="flex flex-col gap-10 lg:flex-row lg:items-stretch lg:gap-12">
+          {/* ================= LEFT COLUMN ================= */}
+          <div className="flex w-full flex-1 flex-col justify-center gap-6">
+            {/* Top chips */}
             <div className="flex flex-wrap items-center gap-2">
               <Badge className="inline-flex items-center gap-2 rounded-full bg-linear-to-r from-indigo-500 via-cyan-400 to-emerald-400 px-4 py-1.5 text-[11px] font-medium text-white shadow-sm">
                 <Sparkles className="h-3.5 w-3.5" />
-                Hire smarter. Grow faster.
+                HireOrbit · Smart job matching
               </Badge>
 
               <span className="inline-flex items-center gap-2 rounded-full border bg-card/70 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                Verified companies
+                <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
+                Verified employers
               </span>
 
               <span className="inline-flex items-center gap-2 rounded-full border bg-card/70 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
-                <Timer className="h-3.5 w-3.5 text-indigo-500" />
-                Faster shortlists
+                <Zap className="h-3.5 w-3.5 text-indigo-500" />
+                Faster pipeline
               </span>
             </div>
 
+            {/* Headline */}
             <div className="space-y-4">
               <h1 className="text-balance text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl lg:text-6xl">
-                Hire the{" "}
+                Find, apply, and hire{" "}
                 <span className="bg-linear-to-r from-indigo-500 via-cyan-400 to-emerald-400 bg-clip-text text-transparent">
-                  right talent
-                </span>{" "}
-                in one orbit.
+                  with confidence
+                </span>
+                .
               </h1>
 
-              <p className="max-w-xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-                HireOrbit helps teams discover, evaluate, and hire top candidates
-                faster—with a streamlined job discovery and application experience
-                tailored for modern companies.
+              <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
+                A modern job portal for candidates and hiring teams—search roles, manage
+                applications, and keep your pipeline moving with clean, structured workflows.
               </p>
             </div>
 
-            {/* SEARCH BAR (better mobile ergonomics) */}
-            <div className="rounded-2xl border bg-card/70 p-3 shadow-lg backdrop-blur supports-backdrop-filter:bg-card/50">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <div className="flex flex-1 items-center gap-2 rounded-xl border bg-background/60 px-3 py-2">
-                  <Search className="h-4 w-4 text-muted-foreground" />
-                  <Input
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    onKeyDown={onKeyDown}
-                    placeholder="Search roles e.g. Frontend Developer"
-                    className="h-10 border-none bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-                  />
+            {/* Search block (more “product-grade”) */}
+            <Card className="border bg-card/70 shadow-lg backdrop-blur supports-backdrop-filter:bg-card/50">
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <div className="flex flex-1 items-center gap-2 rounded-xl border bg-background/70 px-3 py-2">
+                    <Search className="h-4 w-4 text-muted-foreground" />
+                    <Input
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      onKeyDown={onKeyDown}
+                      placeholder="Search roles, skills, or companies (e.g., Frontend Developer)"
+                      className="h-10 border-none bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                    />
+                  </div>
+
+                  <Button
+                    type="button"
+                    onClick={goToJobs}
+                    className="group h-11 w-full rounded-xl px-5 text-sm sm:w-auto sm:text-base"
+                  >
+                    Search jobs
+                    <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                  </Button>
                 </div>
 
-                <Button
-                  type="button"
-                  onClick={goToJobs}
-                  className="group h-11 w-full rounded-xl px-5 text-sm sm:w-auto sm:text-base"
-                >
-                  Find Jobs
-                  <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-                </Button>
-              </div>
+                <Separator className="my-4" />
 
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                <span className="inline-flex items-center gap-1 rounded-full border bg-background/60 px-2.5 py-1">
-                  <Briefcase className="h-3.5 w-3.5" />
-                  Full-time
-                </span>
-                <span className="inline-flex items-center gap-1 rounded-full border bg-background/60 px-2.5 py-1">
-                  <MapPin className="h-3.5 w-3.5" />
-                  Remote / Hybrid
-                </span>
-                <span className="inline-flex items-center gap-1 rounded-full border bg-background/60 px-2.5 py-1">
-                  <Users className="h-3.5 w-3.5" />
-                  100+ teams hiring
-                </span>
-              </div>
-            </div>
+                <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                  <span className="inline-flex items-center gap-1 rounded-full border bg-background/70 px-2.5 py-1">
+                    <Briefcase className="h-3.5 w-3.5" />
+                    Full-time / Internship
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full border bg-background/70 px-2.5 py-1">
+                    <MapPin className="h-3.5 w-3.5" />
+                    Remote / Hybrid
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full border bg-background/70 px-2.5 py-1">
+                    <Users className="h-3.5 w-3.5" />
+                    Growing teams
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
 
-            {/* TRUST / STATS (improved responsiveness) */}
-            <div className="grid gap-3 sm:grid-cols-3">
-              <MetricPill label="Curated roles" value="500+" sub="added this week" />
-              <MetricPill label="Avg time-to-apply" value="2 min" sub="1-click flow" />
-              <MetricPill label="Hiring teams" value="100+" sub="verified employers" />
+            {/* Trust metrics (cleaner cards) */}
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <MetricPill
+                icon={<TrendingUp className="h-4 w-4 text-indigo-500" />}
+                label="Curated roles"
+                value="500+"
+                sub="added this week"
+              />
+              <MetricPill
+                icon={<Timer className="h-4 w-4 text-emerald-500" />}
+                label="Avg time-to-apply"
+                value="2 min"
+                sub="quick apply flow"
+              />
+              <MetricPill
+                icon={<CheckCircle2 className="h-4 w-4 text-cyan-500" />}
+                label="Verified teams"
+                value="100+"
+                sub="higher-quality listings"
+              />
             </div>
           </div>
 
-          {/* RIGHT */}
-          <div className="w-full md:pt-1">
-            <Card className="relative overflow-hidden border border-border/70 bg-linear-to-b from-background to-muted/70 shadow-xl">
-              <div className="pointer-events-none absolute -right-20 -top-20 h-48 w-48 rounded-full bg-linear-to-tr from-indigo-500/15 via-cyan-400/15 to-emerald-400/15 blur-3xl" />
-              <div className="pointer-events-none absolute -bottom-16 -left-16 h-44 w-44 rounded-full bg-linear-to-tr from-emerald-400/15 via-cyan-400/10 to-indigo-500/10 blur-3xl" />
+          {/* ================= RIGHT COLUMN ================= */}
+          <div className="flex w-full flex-col gap-4 lg:w-[420px] lg:min-w-[420px]">
+            <Card className="relative overflow-hidden border bg-linear-to-b from-background to-muted/70 shadow-xl">
+              <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-linear-to-tr from-indigo-500/15 via-cyan-400/12 to-emerald-400/14 blur-3xl" />
+              <div className="pointer-events-none absolute -bottom-16 -left-20 h-52 w-52 rounded-full bg-linear-to-tr from-emerald-400/14 via-cyan-400/10 to-indigo-500/10 blur-3xl" />
 
               <CardHeader className="space-y-2">
                 <div className="flex items-center justify-between gap-3">
@@ -260,12 +268,16 @@ function HeroSection() {
                   </CardTitle>
 
                   <span className="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
-                    {recLoading ? "Loading…" : recommended.length ? "Matching now" : "Popular picks"}
+                    {recLoading
+                      ? "Loading…"
+                      : recommended.length
+                      ? "Matching now"
+                      : "Popular picks"}
                   </span>
                 </div>
 
                 <p className="text-xs text-muted-foreground">
-                  Roles suggested based on your skills, preferences, and recent activity.
+                  Suggested roles based on your activity and profile signals.
                 </p>
 
                 {recError && (
@@ -277,10 +289,10 @@ function HeroSection() {
 
               <CardContent className="space-y-3">
                 {recLoading ? (
-                  <div className="flex flex-col gap-3">
+                  <div className="space-y-3">
                     <SkeletonRole />
                     <SkeletonRole />
-                    <div className="rounded-xl border bg-background/50 p-3">
+                    <div className="rounded-xl border bg-background/60 p-3">
                       <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                         <Loader2 className="h-4 w-4 animate-spin" />
                         Fetching recommendations…
@@ -296,7 +308,10 @@ function HeroSection() {
                       tags={(displayJobs[0]?.tags ?? ["React", "TypeScript"]).slice(0, 3)}
                       cta="View"
                       onClick={() => router.push(`/jobs/${displayJobs[0]?.id ?? ""}`)}
-                      disabled={!displayJobs[0]?.id || displayJobs[0]?.id.startsWith("fallback")}
+                      disabled={
+                        !displayJobs[0]?.id ||
+                        displayJobs[0]?.id.startsWith("fallback")
+                      }
                     />
 
                     <PreviewRole
@@ -304,16 +319,19 @@ function HeroSection() {
                       title={displayJobs[1]?.title ?? "Role"}
                       meta={buildMeta(displayJobs[1])}
                       tags={(displayJobs[1]?.tags ?? ["UI/UX", "Figma"]).slice(0, 3)}
-                      cta="Save"
+                      cta="View"
                       variant="outline"
                       onClick={() => router.push(`/jobs/${displayJobs[1]?.id ?? ""}`)}
-                      disabled={!displayJobs[1]?.id || displayJobs[1]?.id.startsWith("fallback")}
+                      disabled={
+                        !displayJobs[1]?.id ||
+                        displayJobs[1]?.id.startsWith("fallback")
+                      }
                     />
 
-                    <div className="rounded-xl border bg-background/50 p-3">
+                    <div className="rounded-xl border bg-background/60 p-3">
                       <p className="text-[11px] text-muted-foreground">
-                        Create a free account to unlock tailored recommendations, saved roles,
-                        and 1-click applications—designed to keep your hiring in orbit.
+                        Create an account to unlock tailored recommendations, saved roles,
+                        and 1-click applications.
                       </p>
 
                       <div className="mt-3 flex flex-col gap-2 sm:flex-row">
@@ -340,10 +358,9 @@ function HeroSection() {
               </CardContent>
             </Card>
 
-            {/* Mini badges: responsive */}
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              <MiniChip title="Verified employers" desc="Reduce spam & improve quality" />
-              <MiniChip title="Smart pipeline" desc="Shortlist & schedule faster" />
+            <div className="grid gap-2 sm:grid-cols-2">
+              <MiniChip title="Cleaner matches" desc="Less noise, better fit." icon={<Sparkles className="h-4 w-4 text-indigo-500" />} />
+              <MiniChip title="Faster decisions" desc="Move candidates in minutes." icon={<Timer className="h-4 w-4 text-emerald-500" />} />
             </div>
           </div>
         </div>
@@ -377,19 +394,26 @@ function SkeletonRole() {
 }
 
 function MetricPill({
+  icon,
   label,
   value,
   sub,
 }: {
+  icon: React.ReactNode;
   label: string;
   value: string;
   sub: string;
 }) {
   return (
-    <div className="rounded-2xl border bg-card/70 px-4 py-3 shadow-sm backdrop-blur supports-backdrop-filter:bg-card/50">
-      <p className="text-[11px] text-muted-foreground">{label}</p>
-      <p className="mt-1 text-lg font-semibold tracking-tight">{value}</p>
-      <p className="text-[11px] text-muted-foreground">{sub}</p>
+    <div className="flex flex-1 items-start gap-3 rounded-2xl border bg-card/70 px-4 py-3 shadow-sm backdrop-blur supports-backdrop-filter:bg-card/50">
+      <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl border bg-background/70">
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <p className="text-[11px] text-muted-foreground">{label}</p>
+        <p className="mt-1 text-lg font-semibold tracking-tight">{value}</p>
+        <p className="text-[11px] text-muted-foreground">{sub}</p>
+      </div>
     </div>
   );
 }
@@ -444,11 +468,24 @@ function PreviewRole({
   );
 }
 
-function MiniChip({ title, desc }: { title: string; desc: string }) {
+function MiniChip({
+  title,
+  desc,
+  icon,
+}: {
+  title: string;
+  desc: string;
+  icon?: React.ReactNode;
+}) {
   return (
-    <div className="rounded-2xl border bg-card/60 px-4 py-3 text-xs shadow-sm backdrop-blur supports-backdrop-filter:bg-card/40">
-      <p className="font-medium">{title}</p>
-      <p className="mt-1 text-[11px] text-muted-foreground">{desc}</p>
+    <div className="flex items-start gap-3 rounded-2xl border bg-card/60 px-4 py-3 text-xs shadow-sm backdrop-blur supports-backdrop-filter:bg-card/40">
+      <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl border bg-background/70">
+        {icon ?? <CheckCircle2 className="h-4 w-4 text-muted-foreground" />}
+      </div>
+      <div>
+        <p className="font-medium">{title}</p>
+        <p className="mt-1 text-[11px] text-muted-foreground">{desc}</p>
+      </div>
     </div>
   );
 }

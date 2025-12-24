@@ -137,33 +137,6 @@ function Footer() {
           </div>
         </div>
 
-        {/* Right: Newsletter */}
-        <div className="flex flex-1 flex-col gap-4">
-          <h3 className="text-sm font-semibold">Stay in the loop</h3>
-          <p className="text-sm text-muted-foreground">
-            Get hiring insights, product updates, and curated job market trends
-            delivered to your inbox.
-          </p>
-          <form
-            className="flex flex-col gap-2 sm:flex-row"
-            onSubmit={(e) => e.preventDefault()}
-          >
-            <div className="flex flex-1 items-center gap-2 rounded-full border bg-card px-3 py-1.5">
-              <Mail className="h-4 w-4 text-muted-foreground" />
-              <Input
-                type="email"
-                placeholder="you@example.com"
-                className="h-8 border-none bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-              />
-            </div>
-            <Button className="h-9 rounded-full px-4 text-sm mt-1 sm:mt-0">
-              Subscribe
-            </Button>
-          </form>
-          <p className="text-[11px] text-muted-foreground">
-            We respect your privacy. Unsubscribe anytime.
-          </p>
-        </div>
       </div>
 
       <Separator className="mx-auto w-full max-w-6xl" />
