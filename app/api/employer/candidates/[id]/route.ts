@@ -29,7 +29,8 @@ export async function GET(
 
     const payload = verifyJwt(token);
     if (!payload) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    if (payload.role !== "employer") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (payload.role !== "employer")
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const { id } = await ctx.params;
 
@@ -38,7 +39,6 @@ export async function GET(
 
     // --- Authorization: candidate must have applied to employer's job (same rule) ---
     // FIX: avoid UUID/text mismatch by explicitly casting both sides to uuid in Postgres
-    // If your columns are TEXT (not UUID), casting still works when values are valid UUIDs.
     const rel = await db
       .select({ id: applications.id })
       .from(applications)
@@ -55,6 +55,7 @@ export async function GET(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    // FIX: also cast here to avoid UUID/text mismatch when users.id is uuid but candidateId is a string
     const base = await db
       .select({
         id: users.id,
@@ -62,11 +63,12 @@ export async function GET(
         email: users.email,
       })
       .from(users)
-      .where(eq(users.id, candidateId))
+      .where(sql`${users.id}::uuid = ${candidateId}::uuid`)
       .limit(1);
 
     if (!base[0]) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+    // FIX: also cast here for userProfiles.userId comparisons
     const profile = await db
       .select({
         headline: userProfiles.headline,
@@ -75,13 +77,14 @@ export async function GET(
         resumeUrl: userProfiles.resumeUrl,
       })
       .from(userProfiles)
-      .where(eq(userProfiles.userId, candidateId))
+      .where(sql`${userProfiles.userId}::uuid = ${candidateId}::uuid`)
       .limit(1);
 
+    // FIX: also cast here for userSkills.userId comparisons
     const skills = await db
       .select({ skill: userSkills.skill })
       .from(userSkills)
-      .where(eq(userSkills.userId, candidateId));
+      .where(sql`${userSkills.userId}::uuid = ${candidateId}::uuid`);
 
     return NextResponse.json({
       user: base[0],

@@ -667,16 +667,6 @@ function EmployerApplicationCard({ application }: { application: EmployerApplica
         <p className="max-w-xl text-[11px] text-muted-foreground">{application.step}</p>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="rounded-full"
-            // Optional: wire to candidate profile page if you have it
-            onClick={() => router.push(`/dashboard/candidates/${application.id}`)}
-          >
-            View profile
-          </Button>
           <Button type="button" size="sm" className="rounded-full">
             Move stage
           </Button>
