@@ -1,5 +1,4 @@
 // app/dashboard/applications/page.tsx
-
 "use client";
 
 import * as React from "react";
@@ -14,12 +13,32 @@ import {
   Building2,
   Calendar,
   Mail,
+  ArrowRightCircle,
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type Role = "candidate" | "employer";
 
@@ -94,6 +113,16 @@ type EmployerApplicationsResponse = {
 
 type TabKey = "all" | "active" | "interview" | "rejected";
 
+/** Stage options aligned to backend enum */
+const STAGE_OPTIONS: { value: ApplicationStatus; label: string }[] = [
+  { value: "applied", label: "Applied" },
+  { value: "shortlisted", label: "Shortlisted" },
+  { value: "interview_scheduled", label: "Interview scheduled" },
+  { value: "offered", label: "Offered" },
+  { value: "hired", label: "Hired" },
+  { value: "rejected", label: "Rejected" },
+];
+
 export default function ApplicationsPage() {
   const router = useRouter();
 
@@ -106,6 +135,25 @@ export default function ApplicationsPage() {
     React.useState<CandidateApplicationsResponse | null>(null);
   const [employerData, setEmployerData] =
     React.useState<EmployerApplicationsResponse | null>(null);
+
+  /**
+   * ✅ NEW (does not change your existing logic):
+   * updater for employer list after stage change.
+   */
+  const updateEmployerApplication = React.useCallback(
+    (id: string, patch: Partial<EmployerApplication>) => {
+      setEmployerData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          applications: prev.applications.map((a) =>
+            a.id === id ? { ...a, ...patch } : a
+          ),
+        };
+      });
+    },
+    []
+  );
 
   // Load role + applications
   React.useEffect(() => {
@@ -203,7 +251,10 @@ export default function ApplicationsPage() {
             </CardHeader>
 
             <CardContent className="space-y-4">
-              <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabKey)}>
+              <Tabs
+                value={activeTab}
+                onValueChange={(v) => setActiveTab(v as TabKey)}
+              >
                 <TabsList className="grid w-full grid-cols-4">
                   <TabsTrigger value="all">All</TabsTrigger>
                   <TabsTrigger value="active">Active</TabsTrigger>
@@ -219,6 +270,7 @@ export default function ApplicationsPage() {
                     candidateData,
                     employerData,
                     filter: "all",
+                    onEmployerUpdate: updateEmployerApplication,
                   })}
                 </TabsContent>
 
@@ -229,6 +281,7 @@ export default function ApplicationsPage() {
                     candidateData,
                     employerData,
                     filter: "active",
+                    onEmployerUpdate: updateEmployerApplication,
                   })}
                 </TabsContent>
 
@@ -239,6 +292,7 @@ export default function ApplicationsPage() {
                     candidateData,
                     employerData,
                     filter: "interview",
+                    onEmployerUpdate: updateEmployerApplication,
                   })}
                 </TabsContent>
 
@@ -249,6 +303,7 @@ export default function ApplicationsPage() {
                     candidateData,
                     employerData,
                     filter: "rejected",
+                    onEmployerUpdate: updateEmployerApplication,
                   })}
                 </TabsContent>
               </Tabs>
@@ -276,12 +331,14 @@ function renderList({
   candidateData,
   employerData,
   filter,
+  onEmployerUpdate,
 }: {
   loadingList: boolean;
   isCandidate: boolean;
   candidateData: CandidateApplicationsResponse | null;
   employerData: EmployerApplicationsResponse | null;
   filter: TabKey;
+  onEmployerUpdate: (id: string, patch: Partial<EmployerApplication>) => void;
 }) {
   if (loadingList) {
     return (
@@ -294,7 +351,11 @@ function renderList({
   return isCandidate ? (
     <CandidateApplicationsList data={candidateData} filter={filter} />
   ) : (
-    <EmployerApplicationsList data={employerData} filter={filter} />
+    <EmployerApplicationsList
+      data={employerData}
+      filter={filter}
+      onUpdate={onEmployerUpdate}
+    />
   );
 }
 
@@ -307,7 +368,11 @@ function ApplicationsHeader({ role }: { role: Role }) {
     <header className="flex flex-col justify-between gap-4 rounded-xl border bg-background px-4 py-4 shadow-sm md:flex-row md:items-center md:px-6">
       <div className="flex items-center gap-4">
         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary md:h-14 md:w-14">
-          {isCandidate ? <Briefcase className="h-6 w-6" /> : <User className="h-6 w-6" />}
+          {isCandidate ? (
+            <Briefcase className="h-6 w-6" />
+          ) : (
+            <User className="h-6 w-6" />
+          )}
         </div>
         <div className="space-y-1">
           <h1 className="text-lg font-semibold tracking-tight md:text-xl">
@@ -354,11 +419,9 @@ function statusLabel(status: ApplicationStatus) {
   }
 }
 
-function statusBadgeVariant(status: ApplicationStatus):
-  | "default"
-  | "secondary"
-  | "outline"
-  | "destructive" {
+function statusBadgeVariant(
+  status: ApplicationStatus
+): "default" | "secondary" | "outline" | "destructive" {
   switch (status) {
     case "applied":
       return "secondary";
@@ -424,8 +487,8 @@ function EmployerTipsCard() {
       </CardHeader>
       <CardContent className="space-y-2 text-xs text-muted-foreground">
         <p>
-          Responding quickly to candidates and keeping your pipeline clean improves
-          your employer brand.
+          Responding quickly to candidates and keeping your pipeline clean improves your
+          employer brand.
         </p>
         <ul className="list-disc space-y-1 pl-4">
           <li>Move candidates to screening/interview as soon as you review.</li>
@@ -469,7 +532,9 @@ function CandidateApplicationsList({
 
     // ✅ Same logic, just aligned to backend enum
     if (filter === "active") {
-      return ["applied", "shortlisted", "interview_scheduled", "offered"].includes(app.status);
+      return ["applied", "shortlisted", "interview_scheduled", "offered"].includes(
+        app.status
+      );
     }
     if (filter === "interview") {
       return ["interview_scheduled", "offered"].includes(app.status);
@@ -501,7 +566,9 @@ function CandidateApplicationCard({ application }: { application: CandidateAppli
   const router = useRouter();
 
   const appliedDate = new Date(application.appliedAt);
-  const interviewDate = application.nextInterviewAt ? new Date(application.nextInterviewAt) : null;
+  const interviewDate = application.nextInterviewAt
+    ? new Date(application.nextInterviewAt)
+    : null;
 
   const isUpcomingInterview = interviewDate && interviewDate.getTime() > Date.now();
 
@@ -532,13 +599,19 @@ function CandidateApplicationCard({ application }: { application: CandidateAppli
           <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
             <Calendar className="h-3 w-3" />
             Applied{" "}
-            {appliedDate.toLocaleDateString(undefined, { month: "short", day: "2-digit" })}
+            {appliedDate.toLocaleDateString(undefined, {
+              month: "short",
+              day: "2-digit",
+            })}
           </span>
           {isUpcomingInterview && (
             <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary">
               <Calendar className="h-3 w-3" />
               Interview{" "}
-              {interviewDate!.toLocaleDateString(undefined, { month: "short", day: "2-digit" })}
+              {interviewDate!.toLocaleDateString(undefined, {
+                month: "short",
+                day: "2-digit",
+              })}
             </span>
           )}
         </div>
@@ -567,9 +640,11 @@ function CandidateApplicationCard({ application }: { application: CandidateAppli
 function EmployerApplicationsList({
   data,
   filter,
+  onUpdate,
 }: {
   data: EmployerApplicationsResponse | null;
   filter: TabKey;
+  onUpdate: (id: string, patch: Partial<EmployerApplication>) => void;
 }) {
   if (!data || data.applications.length === 0) {
     return (
@@ -585,7 +660,9 @@ function EmployerApplicationsList({
 
     // ✅ Same logic, aligned to backend enum
     if (filter === "active") {
-      return ["applied", "shortlisted", "interview_scheduled", "offered"].includes(app.status);
+      return ["applied", "shortlisted", "interview_scheduled", "offered"].includes(
+        app.status
+      );
     }
     if (filter === "interview") {
       return ["interview_scheduled", "offered"].includes(app.status);
@@ -607,17 +684,27 @@ function EmployerApplicationsList({
   return (
     <div className="flex flex-col gap-3">
       {filtered.map((app) => (
-        <EmployerApplicationCard key={app.id} application={app} />
+        <EmployerApplicationCard
+          key={app.id}
+          application={app}
+          onUpdate={onUpdate}
+        />
       ))}
     </div>
   );
 }
 
-function EmployerApplicationCard({ application }: { application: EmployerApplication }) {
-  const router = useRouter();
-
+function EmployerApplicationCard({
+  application,
+  onUpdate,
+}: {
+  application: EmployerApplication;
+  onUpdate: (id: string, patch: Partial<EmployerApplication>) => void;
+}) {
   const appliedDate = new Date(application.appliedAt);
-  const interviewDate = application.nextInterviewAt ? new Date(application.nextInterviewAt) : null;
+  const interviewDate = application.nextInterviewAt
+    ? new Date(application.nextInterviewAt)
+    : null;
 
   const isUpcomingInterview = interviewDate && interviewDate.getTime() > Date.now();
 
@@ -667,11 +754,176 @@ function EmployerApplicationCard({ application }: { application: EmployerApplica
         <p className="max-w-xl text-[11px] text-muted-foreground">{application.step}</p>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" size="sm" className="rounded-full">
-            Move stage
-          </Button>
+          {/* ✅ NEW: Move stage now works without changing your existing logic */}
+          <MoveStageDialog
+            application={application}
+            onUpdated={(patch) => onUpdate(application.id, patch)}
+          />
         </div>
       </div>
     </div>
+  );
+}
+
+/* ---------- MOVE STAGE DIALOG (Employer only) ---------- */
+
+function MoveStageDialog({
+  application,
+  onUpdated,
+}: {
+  application: EmployerApplication;
+  onUpdated: (patch: Partial<EmployerApplication>) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
+
+  const [status, setStatus] = React.useState<ApplicationStatus>(application.status);
+  const [step, setStep] = React.useState<string>(application.step || "");
+  const [nextInterviewAt, setNextInterviewAt] = React.useState<string>(
+    application.nextInterviewAt
+      ? new Date(application.nextInterviewAt).toISOString().slice(0, 16)
+      : ""
+  );
+
+  React.useEffect(() => {
+    // Keep dialog in sync with latest application row
+    setStatus(application.status);
+    setStep(application.step || "");
+    setNextInterviewAt(
+      application.nextInterviewAt
+        ? new Date(application.nextInterviewAt).toISOString().slice(0, 16)
+        : ""
+    );
+  }, [application.id, application.status, application.step, application.nextInterviewAt, open]);
+
+  const requiresInterview = status === "interview_scheduled";
+
+  async function handleSave() {
+    const token =
+      typeof window !== "undefined"
+        ? window.localStorage.getItem(AUTH_TOKEN_KEY)
+        : null;
+
+    if (!token) {
+      toast.error("Session expired. Please login again.");
+      return;
+    }
+
+    if (requiresInterview && !nextInterviewAt) {
+      toast.error("Please select an interview date/time.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const payload = {
+        status,
+        step: step?.trim() || undefined,
+        nextInterviewAt: nextInterviewAt ? new Date(nextInterviewAt).toISOString() : null,
+      };
+
+      // ✅ Employer status update endpoint (as per your project pattern)
+      await axios.patch(
+        `/api/employer/applications/${application.id}/status`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      // ✅ Update UI (does not change server logic; just refreshes local state)
+      onUpdated({
+        status,
+        step: payload.step ?? application.step,
+        nextInterviewAt: payload.nextInterviewAt,
+      });
+
+      toast.success("Stage updated.");
+      setOpen(false);
+    } catch (err) {
+      console.error("[MoveStage] update failed:", err);
+      toast.error("Failed to update stage.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button type="button" size="sm" className="rounded-full">
+          <ArrowRightCircle className="mr-2 h-4 w-4" />
+          Move stage
+        </Button>
+      </DialogTrigger>
+
+      <DialogContent className="sm:max-w-[520px]">
+        <DialogHeader>
+          <DialogTitle>Move candidate to next stage</DialogTitle>
+          <DialogDescription>
+            Update the candidate&apos;s pipeline stage. Changes will reflect in their dashboard.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>New stage</Label>
+            <Select
+              value={status}
+              onValueChange={(v) => setStatus(v as ApplicationStatus)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select stage" />
+              </SelectTrigger>
+              <SelectContent>
+                {STAGE_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {requiresInterview && (
+            <div className="space-y-2">
+              <Label>Interview date &amp; time</Label>
+              <Input
+                type="datetime-local"
+                value={nextInterviewAt}
+                onChange={(e) => setNextInterviewAt(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Required for “Interview scheduled”.
+              </p>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label>Step / note (optional)</Label>
+            <Textarea
+              value={step}
+              onChange={(e) => setStep(e.target.value)}
+              placeholder='E.g., "Screening call scheduled with HR"'
+              className="min-h-[90px]"
+            />
+          </div>
+        </div>
+
+        <DialogFooter className="mt-2">
+          <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
+          <Button type="button" onClick={handleSave} disabled={saving}>
+            {saving ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving…
+              </>
+            ) : (
+              "Update stage"
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

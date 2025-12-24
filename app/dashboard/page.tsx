@@ -19,6 +19,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import Link from "next/link";
 
 type Role = "candidate" | "employer";
 
@@ -646,9 +647,11 @@ function EmployerJobsPanel({
           </div>
         ))}
 
+       <Link href="/dashboard/jobs" passHref> 
         <Button variant="outline" size="sm" className="mt-1 w-full rounded-full text-xs">
           View all job posts
         </Button>
+        </Link>
       </CardContent>
     </Card>
   );
