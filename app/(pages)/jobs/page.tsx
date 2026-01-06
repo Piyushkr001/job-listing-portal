@@ -22,7 +22,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type Role = "candidate" | "employer";
 
@@ -94,7 +94,6 @@ export default function JobsPage() {
 
         if (cancelled) return;
 
-        // Fallback defaults for any missing fields
         const normalized = (data.jobs || []).map((job) => ({
           ...job,
           workMode: job.workMode || ("onsite" as WorkMode),
@@ -117,7 +116,11 @@ export default function JobsPage() {
     };
   }, [router]);
 
-  const handleSaveToggle = async (jobId: string, isSaved: boolean | undefined) => {
+  // ✅ FIXED: unsave must use DELETE /api/saved-jobs/by-job/[jobId]
+  const handleSaveToggle = async (
+    jobId: string,
+    isSaved: boolean | undefined
+  ) => {
     try {
       const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
       if (!token) {
@@ -128,14 +131,13 @@ export default function JobsPage() {
       setSavingJobId(jobId);
 
       if (isSaved) {
-        // Unsave
-        await axios.delete("/api/saved-jobs", {
+        // ✅ Unsave (by jobId)
+        await axios.delete(`/api/saved-jobs/by-job/${jobId}`, {
           headers: { Authorization: `Bearer ${token}` },
-          data: { jobId },
         });
         toast.success("Job removed from saved.");
       } else {
-        // Save
+        // ✅ Save
         await axios.post(
           "/api/saved-jobs",
           { jobId },
@@ -174,16 +176,12 @@ export default function JobsPage() {
 
     const query = search.trim().toLowerCase();
     if (query) {
-      const combined =
-        `${job.title} ${job.company} ${job.location}`.toLowerCase();
+      const combined = `${job.title} ${job.company} ${job.location}`.toLowerCase();
       if (!combined.includes(query)) return false;
     }
 
-    if (workModeFilter !== "any" && job.workMode !== workModeFilter)
-      return false;
-
-    if (jobTypeFilter !== "any" && job.jobType !== jobTypeFilter)
-      return false;
+    if (workModeFilter !== "any" && job.workMode !== workModeFilter) return false;
+    if (jobTypeFilter !== "any" && job.jobType !== jobTypeFilter) return false;
 
     return true;
   });
@@ -195,7 +193,6 @@ export default function JobsPage() {
       <JobsHeader isCandidate={isCandidate} />
 
       <div className="flex flex-col gap-4 lg:flex-row">
-        {/* LEFT: Filters */}
         <div className="w-full lg:max-w-xs">
           <FiltersCard
             workModeFilter={workModeFilter}
@@ -207,7 +204,6 @@ export default function JobsPage() {
           />
         </div>
 
-        {/* RIGHT: List */}
         <div className="flex w-full flex-1 flex-col">
           <JobsListCard
             jobs={filteredJobs}
@@ -216,6 +212,7 @@ export default function JobsPage() {
             setActiveTab={setActiveTab}
             onSaveToggle={handleSaveToggle}
             savingJobId={savingJobId}
+            onOpenJob={(jobId) => router.push(`/jobs/${jobId}`)} // ✅ use router
           />
         </div>
       </div>
@@ -278,9 +275,7 @@ function FiltersCard({
           <Filter className="h-4 w-4" />
         </div>
         <div>
-          <CardTitle className="text-sm font-semibold">
-            Filters
-          </CardTitle>
+          <CardTitle className="text-sm font-semibold">Filters</CardTitle>
           <p className="text-xs text-muted-foreground">
             Refine the job list based on your preferences.
           </p>
@@ -288,11 +283,8 @@ function FiltersCard({
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {/* Search */}
         <div className="space-y-1.5">
-          <p className="text-xs font-medium text-muted-foreground">
-            Search
-          </p>
+          <p className="text-xs font-medium text-muted-foreground">Search</p>
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -304,81 +296,47 @@ function FiltersCard({
           </div>
         </div>
 
-        {/* Work mode */}
         <div className="space-y-1.5">
-          <p className="text-xs font-medium text-muted-foreground">
-            Work mode
-          </p>
+          <p className="text-xs font-medium text-muted-foreground">Work mode</p>
           <div className="flex flex-wrap gap-2">
-            <FilterChip
-              active={workModeFilter === "any"}
-              onClick={() => setWorkModeFilter("any")}
-            >
+            <FilterChip active={workModeFilter === "any"} onClick={() => setWorkModeFilter("any")}>
               Any
             </FilterChip>
-            <FilterChip
-              active={workModeFilter === "onsite"}
-              onClick={() => setWorkModeFilter("onsite")}
-            >
+            <FilterChip active={workModeFilter === "onsite"} onClick={() => setWorkModeFilter("onsite")}>
               On-site
             </FilterChip>
-            <FilterChip
-              active={workModeFilter === "remote"}
-              onClick={() => setWorkModeFilter("remote")}
-            >
+            <FilterChip active={workModeFilter === "remote"} onClick={() => setWorkModeFilter("remote")}>
               Remote
             </FilterChip>
-            <FilterChip
-              active={workModeFilter === "hybrid"}
-              onClick={() => setWorkModeFilter("hybrid")}
-            >
+            <FilterChip active={workModeFilter === "hybrid"} onClick={() => setWorkModeFilter("hybrid")}>
               Hybrid
             </FilterChip>
           </div>
         </div>
 
-        {/* Job type */}
         <div className="space-y-1.5">
-          <p className="text-xs font-medium text-muted-foreground">
-            Job type
-          </p>
+          <p className="text-xs font-medium text-muted-foreground">Job type</p>
           <div className="flex flex-wrap gap-2">
-            <FilterChip
-              active={jobTypeFilter === "any"}
-              onClick={() => setJobTypeFilter("any")}
-            >
+            <FilterChip active={jobTypeFilter === "any"} onClick={() => setJobTypeFilter("any")}>
               Any
             </FilterChip>
-            <FilterChip
-              active={jobTypeFilter === "full-time"}
-              onClick={() => setJobTypeFilter("full-time")}
-            >
+            <FilterChip active={jobTypeFilter === "full-time"} onClick={() => setJobTypeFilter("full-time")}>
               Full-time
             </FilterChip>
-            <FilterChip
-              active={jobTypeFilter === "part-time"}
-              onClick={() => setJobTypeFilter("part-time")}
-            >
+            <FilterChip active={jobTypeFilter === "part-time"} onClick={() => setJobTypeFilter("part-time")}>
               Part-time
             </FilterChip>
-            <FilterChip
-              active={jobTypeFilter === "internship"}
-              onClick={() => setJobTypeFilter("internship")}
-            >
+            <FilterChip active={jobTypeFilter === "internship"} onClick={() => setJobTypeFilter("internship")}>
               Internship
             </FilterChip>
-            <FilterChip
-              active={jobTypeFilter === "contract"}
-              onClick={() => setJobTypeFilter("contract")}
-            >
+            <FilterChip active={jobTypeFilter === "contract"} onClick={() => setJobTypeFilter("contract")}>
               Contract
             </FilterChip>
           </div>
         </div>
 
         <p className="text-[11px] text-muted-foreground">
-          You can also save interesting jobs from the list on the right and view
-          them later from your Saved jobs section.
+          You can save interesting jobs from the list and view them later from your Saved jobs section.
         </p>
       </CardContent>
     </Card>
@@ -418,6 +376,7 @@ function JobsListCard({
   setActiveTab,
   onSaveToggle,
   savingJobId,
+  onOpenJob,
 }: {
   jobs: JobListItem[];
   total: number;
@@ -425,14 +384,13 @@ function JobsListCard({
   setActiveTab: (v: "all" | "saved") => void;
   onSaveToggle: (jobId: string, isSaved: boolean | undefined) => void;
   savingJobId: string | null;
+  onOpenJob: (jobId: string) => void;
 }) {
   return (
     <Card className="border bg-background shadow-sm">
       <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="space-y-1">
-          <CardTitle className="text-sm font-semibold">
-            Job listings
-          </CardTitle>
+          <CardTitle className="text-sm font-semibold">Job listings</CardTitle>
           <p className="text-xs text-muted-foreground">
             Showing {jobs.length} of {total} jobs based on your filters.
           </p>
@@ -464,6 +422,7 @@ function JobsListCard({
                 job={job}
                 onSaveToggle={onSaveToggle}
                 saving={savingJobId === job.id}
+                onOpen={() => onOpenJob(job.id)}
               />
             ))}
           </div>
@@ -479,52 +438,39 @@ function JobCard({
   job,
   onSaveToggle,
   saving,
+  onOpen,
 }: {
   job: JobListItem;
   onSaveToggle: (jobId: string, isSaved: boolean | undefined) => void;
   saving: boolean;
+  onOpen: () => void;
 }) {
   const postedDate = new Date(job.postedAt);
 
   const workModeLabel =
-    job.workMode === "remote"
-      ? "Remote"
-      : job.workMode === "hybrid"
-      ? "Hybrid"
-      : "On-site";
+    job.workMode === "remote" ? "Remote" : job.workMode === "hybrid" ? "Hybrid" : "On-site";
 
-  const jobTypeLabel = (() => {
-    switch (job.jobType) {
-      case "full-time":
-        return "Full-time";
-      case "part-time":
-        return "Part-time";
-      case "internship":
-        return "Internship";
-      case "contract":
-        return "Contract";
-      default:
-        return job.jobType;
-    }
-  })();
+  const jobTypeLabel =
+    job.jobType === "full-time"
+      ? "Full-time"
+      : job.jobType === "part-time"
+      ? "Part-time"
+      : job.jobType === "internship"
+      ? "Internship"
+      : job.jobType === "contract"
+      ? "Contract"
+      : job.jobType;
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border bg-card px-3 py-3 text-xs sm:px-4 sm:py-3">
-      {/* Top row: title + badges + save button */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex flex-col gap-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-semibold">{job.title}</span>
-            <Badge
-              variant="outline"
-              className="rounded-full px-2 py-0.5 text-[10px]"
-            >
+            <Badge variant="outline" className="rounded-full px-2 py-0.5 text-[10px]">
               {jobTypeLabel}
             </Badge>
-            <Badge
-              variant="outline"
-              className="rounded-full px-2 py-0.5 text-[10px]"
-            >
+            <Badge variant="outline" className="rounded-full px-2 py-0.5 text-[10px]">
               {workModeLabel}
             </Badge>
           </div>
@@ -556,24 +502,13 @@ function JobCard({
             <span className="inline-flex items-center gap-1">
               <Clock className="h-3 w-3" />
               Posted{" "}
-              {postedDate.toLocaleDateString(undefined, {
-                month: "short",
-                day: "2-digit",
-              })}
+              {postedDate.toLocaleDateString(undefined, { month: "short", day: "2-digit" })}
             </span>
           </div>
         </div>
 
         <div className="flex flex-row items-center gap-2 sm:flex-col sm:items-end sm:gap-1">
-          <Button
-            type="button"
-            size="sm"
-            className="rounded-full"
-            onClick={() => {
-              // Navigate to job details page when you implement it
-              window.location.assign(`/jobs/${job.id}`);
-            }}
-          >
+          <Button type="button" size="sm" className="rounded-full" onClick={onOpen}>
             View details
           </Button>
 
@@ -584,22 +519,16 @@ function JobCard({
             className="h-7 w-7 rounded-full"
             disabled={saving}
             onClick={() => onSaveToggle(job.id, job.isSaved)}
+            title={job.isSaved ? "Unsave job" : "Save job"}
           >
-            {job.isSaved ? (
-              <BookmarkCheck className="h-3 w-3" />
-            ) : (
-              <Bookmark className="h-3 w-3" />
-            )}
+            {job.isSaved ? <BookmarkCheck className="h-3 w-3" /> : <Bookmark className="h-3 w-3" />}
           </Button>
         </div>
       </div>
 
-      {/* Bottom text */}
       <p className="mt-1 max-w-3xl text-[11px] text-muted-foreground">
-        {/* Placeholder description – you can replace with job.shortDescription from API later */}
-        An opportunity to join a fast-moving team and work on meaningful
-        problems. Click &quot;View details&quot; to see the full description,
-        responsibilities, and requirements.
+        An opportunity to join a fast-moving team and work on meaningful problems. Click &quot;View details&quot; to see
+        the full description, responsibilities, and requirements.
       </p>
     </div>
   );

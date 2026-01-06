@@ -32,7 +32,7 @@ type WorkMode = "onsite" | "remote" | "hybrid";
 type JobType = "full-time" | "part-time" | "internship" | "contract";
 
 type SavedJob = {
-  id: string; // saved row id
+  id: string; // saved row id (still returned by API; not used for delete anymore)
   jobId: string; // job id
   jobTitle: string;
   company: string;
@@ -411,23 +411,17 @@ function SavedJobCard({
     job.workMode === "remote"
       ? "Remote"
       : job.workMode === "hybrid"
-      ? "Hybrid"
-      : "On-site";
+        ? "Hybrid"
+        : "On-site";
 
-  const jobTypeLabel = (() => {
-    switch (job.jobType) {
-      case "full-time":
-        return "Full-time";
-      case "part-time":
-        return "Part-time";
-      case "internship":
-        return "Internship";
-      case "contract":
-        return "Contract";
-      default:
-        return job.jobType;
-    }
-  })();
+  const jobTypeLabel =
+    job.jobType === "full-time"
+      ? "Full-time"
+      : job.jobType === "part-time"
+        ? "Part-time"
+        : job.jobType === "internship"
+          ? "Internship"
+          : "Contract";
 
   const isOpen = job.status === "open";
 
@@ -450,20 +444,23 @@ function SavedJobCard({
 
     setRemoving(true);
 
-    // optimistic UI (same as yours)
+    // ✅ Optimistic UI: remove by jobId (more stable than saved row id)
     onUpdate((prev) => {
       if (!prev) return prev;
-      const nextJobs = prev.jobs.filter((j) => j.id !== job.id);
+
+      const nextJobs = prev.jobs.filter((j) => j.jobId !== job.jobId);
+
       const nextStats = {
         total: Math.max(0, prev.stats.total - 1),
         open: Math.max(0, prev.stats.open - (job.status === "open" ? 1 : 0)),
         applied: Math.max(0, prev.stats.applied - (job.applied ? 1 : 0)),
       };
+
       return { ...prev, jobs: nextJobs, stats: nextStats };
     });
 
     try {
-      // ✅ This must match backend: DELETE /api/saved-jobs/[id] where id = saved_jobs.id
+      // ✅ FIXED: backend expects jobId in the route param
       await axios.delete(`/api/saved-jobs/${job.id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -572,7 +569,11 @@ function SavedJobCard({
             disabled={primaryDisabled}
             title={!isOpen && !job.applied ? "This job is closed" : undefined}
           >
-            {navigating ? "Opening..." : job.applied ? "View application" : "Apply now"}
+            {navigating
+              ? "Opening..."
+              : job.applied
+                ? "View application"
+                : "Apply now"}
           </Button>
 
           <Button
